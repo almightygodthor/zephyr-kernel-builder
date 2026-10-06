@@ -47,11 +47,6 @@ def main() -> int:
     root_label = "KernelSU-Next" if root == "ksu-next" else "No Root"
     susfs = os.environ.get("SUSFS_ENABLED", "false").lower() == "true"
     susfs_label = "SUSFS" if susfs else "No SUSFS"
-    release_url = os.environ.get("RELEASE_URL", "")
-    download_url = os.environ.get("DOWNLOAD_URL", "")
-    artifact_name = os.environ.get("ARTIFACT_NAME", "")
-    artifact_size = os.environ.get("ARTIFACT_SIZE", "")
-    artifact_sha256 = os.environ.get("ARTIFACT_SHA256", "")
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
 
     if state == "success":
@@ -60,23 +55,13 @@ def main() -> int:
             "📱 GT Neo 3 · zephyr\n"
             "🧩 Linux 5.10 · MT6895\n"
             f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n\n"
-            f"📦 <code>{html.escape(artifact_name or 'GitHub Release')}</code>"
-            f" · {html.escape(artifact_size or 'size unavailable')}\n"
-            f"🔐 SHA256 <code>{html.escape(artifact_sha256 or 'unavailable')}</code>\n\n"
-            f"🆔 Run <code>#{html.escape(run_number)}</code> · "
-            f"<code>{sha}</code>"
+            "🧪 <b>Actions artifact is ready for testing.</b>\n"
+            f"🆔 Run <code>#{html.escape(run_number)}</code> · <code>{sha}</code>"
         )
-        keyboard = []
-        if download_url:
-            keyboard.append([{"text": "⬇️ Download Kernel ZIP", "url": download_url}])
-        elif release_url:
-            keyboard.append([{"text": "📦 GitHub Release ↗", "url": release_url}])
-        if release_url and download_url:
-            keyboard.append([{"text": "📦 Release Page ↗", "url": release_url}])
-        keyboard.append([
-            {"text": "🌱 KSU-Next ↗", "url": "https://github.com/KernelSU-Next/KernelSU-Next/releases"},
-            {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"},
-        ])
+        keyboard = [
+            [{"text": "🚀 Publish GitHub Release", "callback_data": f"publish:{run_id}:{run_number}"}],
+            [{"text": "🧪 Actions Run / Download", "url": actions_url}],
+        ]
     elif state == "started":
         # The Telegram worker already owns the single live build card.
         # Avoid creating a second BUILD STARTED message from the Actions workflow.
