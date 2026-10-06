@@ -28,7 +28,7 @@ if [ ! -d anykernel3 ]; then
 fi
 
 rsync -a --delete anykernel3/ "$WORK/"
-cp "$IMAGE" "$WORK/Image.gz-dtb"
+cp "$IMAGE" "$WORK/Image.gz"
 
 test -f "$WORK/anykernel.sh" || { echo "AnyKernel3 template missing"; exit 1; }
 
@@ -37,7 +37,7 @@ test -f "$WORK/anykernel.sh" || { echo "AnyKernel3 template missing"; exit 1; }
   cd "$WORK"
   zip -r9 "$OLDPWD/artifacts/${NAME}.zip" . -x '*.git*' >/dev/null
 )
-cp "$IMAGE" "artifacts/Image.gz"
+rm -f "artifacts/Image.gz"
 printf '%s\n' "$NAME" > artifacts/BUILD_NAME
 printf '%s\n' "$TS" > artifacts/BUILD_TIME_UTC
 printf 'Created %s\n' "$NAME"
