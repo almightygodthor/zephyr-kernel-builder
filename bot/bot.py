@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""GitHub Actions Telegram worker for the Zephyr Kernel Builder.
-
-This worker is intentionally short-lived. GitHub Actions starts it on a
-5-minute schedule, it consumes pending Telegram updates, performs any requested
-GitHub Actions operation, confirms the updates, and exits. No external server
-or persistent bot process is required.
-"""
+"""Long-lived GitHub Actions Telegram worker for the Zephyr Kernel Builder."""
 
 import html
 import json
@@ -15,13 +9,21 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 
 TG_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
 WORKFLOW = "376656950"
 BRANCH = os.environ.get("GITHUB_REF", "main")
+
+# Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
+WORKER_SECONDS = 340 * 60
+POLL_TIMEOUT = 20
+MONITOR_INTERVAL = 15
 PENDING_CONFIGS = {}
+TRACKED_RUNS = {}
+SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 GH_API = "https://api.github.com"
@@ -52,9 +54,7 @@ def http_json(url, method="GET", data=None, headers=None, timeout=30):
 
 
 def tg(method, data=None, timeout=20):
-    result = http_json(
-        f"{TG_API}/{method}", method="POST", data=data, timeout=timeout
-    )
+    result = http_json(f"{TG_API}/{method}", method="POST", data=data, timeout=timeout)
     if not result.get("ok"):
         raise APIError(result.get("description", f"Telegram {method} failed"))
     return result.get("result")
@@ -90,29 +90,28 @@ def send(chat_id, text, keyboard=None, message_id=None):
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
 
-    # Editing is optional. A stale callback/deleted message must never kill
-    # the worker; fall back to sending a fresh message.
     if message_id is not None:
         payload["message_id"] = message_id
         try:
             return tg("editMessageText", payload)
         except APIError as exc:
-            print(f"message edit failed, sending a fresh message: {exc}", file=sys.stderr)
+            print(f"message edit failed, sending fresh message: {exc}", file=sys.stderr)
 
     payload.pop("message_id", None)
     return tg("sendMessage", payload)
 
 
+def send_fresh(chat_id, text, keyboard=None):
+    return send(chat_id, text, keyboard)
+
+
 def answer_callback(query_id, text="", show_alert=False):
     try:
-        tg(
-            "answerCallbackQuery",
-            {
-                "callback_query_id": query_id,
-                "text": text,
-                "show_alert": show_alert,
-            },
-        )
+        tg("answerCallbackQuery", {
+            "callback_query_id": query_id,
+            "text": text,
+            "show_alert": show_alert,
+        })
     except Exception as exc:
         print(f"callback answer failed: {exc}", file=sys.stderr)
 
@@ -129,16 +128,15 @@ def is_admin(chat_id, user_id):
 def require_admin(chat_id, user_id):
     if is_admin(chat_id, user_id):
         return True
-    send(chat_id, "⛔ <b>Admin only.</b>\nOnly Telegram group administrators can use the build bot.")
+    send_fresh(chat_id, "⛔ <b>Admin only.</b>\nOnly Telegram group administrators can use the build bot.")
     return False
 
 
 def menu_text():
     return (
         "<b>⚡ ZEPHYR KERNEL BUILDER</b>\n\n"
-        "📱 <b>Realme GT Neo 3</b>\n"
-        "└─ zephyr / MT6895\n"
-        "🧩 Kernel <b>5.10</b>\n\n"
+        "📱 <b>Realme GT Neo 3</b> · zephyr / MT6895\n"
+        "🧩 <b>Linux 5.10</b>\n\n"
         "Choose an action:"
     )
 
@@ -179,25 +177,28 @@ def build_text(root, susfs):
     root_label = "KernelSU-Next" if root == "ksu-next" else "No Root"
     susfs_label = "Enabled" if susfs else "Disabled"
     return (
-        "<b>⚡ ZEPHYR KERNEL BUILD</b>\n\n"
-        "📱 <b>Device</b>\n└─ Realme GT Neo 3 / zephyr\n\n"
-        "🧩 <b>Kernel</b>\n└─ Linux 5.10 / MT6895\n\n"
-        f"🌳 <b>Root</b>\n└─ {root_label}\n"
-        f"🛡 <b>SUSFS</b>\n└─ {susfs_label}\n"
-        "📦 <b>AnyKernel3</b>\n└─ Enabled\n\n"
-        "Confirm this build configuration:"
+        "<b>⚡ BUILD CONFIG</b>\n\n"
+        f"🌳 Root · <code>{root_label}</code>\n"
+        f"🛡 SUSFS · <code>{susfs_label}</code>\n"
+        "📦 AnyKernel3 · <code>Enabled</code>\n\n"
+        "Ready to build?"
     )
 
 
 def active_run():
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=20",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs"
+        f"?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=20",
     )
     for run in data.get("workflow_runs", []):
         if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
             return run
     return None
+
+
+def get_run(run_id):
+    return gh("GET", f"/repos/{REPO}/actions/runs/{run_id}")
 
 
 def dispatch_build(root, susfs):
@@ -221,40 +222,164 @@ def dispatch_build(root, susfs):
 
     run_id = result.get("workflow_run_id")
     if run_id:
-        run = gh("GET", f"/repos/{REPO}/actions/runs/{run_id}")
-        return run, None
+        return gh("GET", f"/repos/{REPO}/actions/runs/{run_id}"), None
 
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=10",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs"
+        f"?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=10",
     )
     runs = data.get("workflow_runs", [])
     return (runs[0] if runs else None), None
 
 
-def run_status_text(run):
+def status_message(run):
     status = run.get("status", "unknown").replace("_", " ").title()
     conclusion = run.get("conclusion")
     if conclusion:
         status = f"{status} / {conclusion.title()}"
-    return status
-
-
-def status_message(run):
     return (
-        "<b>📊 ZEPHYR BUILD STATUS</b>\n\n"
-        f"🆔 <b>Run</b>: #{esc(run.get('run_number', '?'))}\n"
-        f"⚙️ <b>Status</b>: {esc(run_status_text(run))}\n"
-        f"🌿 <b>Branch</b>: <code>{esc(BRANCH)}</code>"
+        "<b>📊 ZEPHYR BUILD</b>\n\n"
+        f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>\n"
+        f"⚙️ <code>{esc(status)}</code>\n"
+        "📱 GT Neo 3 · zephyr\n"
+        "🧩 Linux 5.10 · MT6895"
     )
 
 
 def status_keyboard(run):
     buttons = []
     if run.get("html_url"):
-        buttons.append([{"text": "🔗 GitHub Actions", "url": run["html_url"]}])
-    buttons.append([{"text": "🛑 Cancel Build", "callback_data": f"cancelrun:{run['id']}"}])
+        buttons.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
+    buttons.append([{"text": "🔄 Refresh", "callback_data": "status"}])
+    if run.get("id"):
+        buttons.append([{"text": "🛑 Cancel Build", "callback_data": f"cancelrun:{run['id']}"}])
     return buttons
+
+
+def parse_time(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def job_progress(run):
+    data = gh("GET", f"/repos/{REPO}/actions/runs/{run['id']}/jobs?per_page=100")
+    jobs = data.get("jobs", [])
+    if not jobs:
+        return "Starting runner…", 0, 1
+
+    job = jobs[0]
+    steps = job.get("steps") or []
+    total = max(len(steps), 1)
+    completed = sum(1 for s in steps if s.get("status") == "completed")
+    current = next((s for s in steps if s.get("status") == "in_progress"), None)
+    if current:
+        name = current.get("name", "Working…")
+        pct = min(99, int(((completed + 0.5) / total) * 100))
+    elif job.get("status") in {"queued", "waiting", "requested", "pending"}:
+        name = "Waiting for runner…"
+        pct = 0
+    else:
+        name = steps[-1].get("name", "Finalizing…") if steps else "Starting…"
+        pct = min(99, int((completed / total) * 100))
+
+    labels = {
+        "Checkout builder": "Preparing builder",
+        "Install dependencies": "Installing dependencies",
+        "Notify build started": "Starting build",
+        "Install repo tool": "Preparing repo tool",
+        "Sync Android kernel build manifest": "Syncing kernel source",
+        "Inspect source tree": "Inspecting source",
+        "Prepare Image.gz-only build config": "Configuring kernel",
+        "Integrate KernelSU-Next and SUSFS": "Integrating KSU / SUSFS",
+        "Build Image.gz": "Compiling Image.gz",
+        "Verify Image.gz": "Verifying Image.gz",
+        "Package AnyKernel3": "Packaging AnyKernel3",
+        "Prepare release metadata": "Preparing release",
+        "Create GitHub Release": "Publishing release",
+        "Upload kernel artifacts": "Uploading artifacts",
+        "Notify Telegram": "Finalizing",
+    }
+    return labels.get(name, name), pct, total
+
+
+def elapsed_text(run):
+    started = parse_time(run.get("run_started_at") or run.get("created_at"))
+    if not started:
+        return "--:--"
+    seconds = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+    return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}"
+
+
+def progress_message(run, root, susfs, frame):
+    try:
+        stage, pct, _ = job_progress(run)
+    except Exception as exc:
+        print(f"progress query failed: {exc}", file=sys.stderr)
+        stage, pct = "Checking build progress…", 0
+
+    blocks = 8
+    filled = min(blocks, max(0, int(round(pct / 100 * blocks))))
+    bar = "█" * filled + "░" * (blocks - filled)
+    spin = SPINNER[frame % len(SPINNER)]
+    root_label = "KSU-Next" if root == "ksu-next" else "No Root"
+    susfs_label = "SUSFS" if susfs else "No SUSFS"
+
+    return (
+        f"<b>⚡ ZEPHYR · BUILDING {spin}</b>\n\n"
+        "📱 GT Neo 3 · zephyr\n"
+        "🧩 Linux 5.10 · MT6895\n"
+        f"🌳 {root_label} · 🛡 {susfs_label} · 📦 AK3\n\n"
+        f"{spin} <b>{esc(stage)}</b>\n"
+        f"<code>[{bar}] {pct}%</code>\n"
+        f"⏱ {elapsed_text(run)} · 🆔 #{esc(run.get('run_number', '?'))}"
+    )
+
+
+def progress_keyboard(run):
+    rows = [[{"text": "🔄 Refresh", "callback_data": "status"}]]
+    if run.get("html_url"):
+        rows.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
+    rows.append([{"text": "🛑 Cancel Build", "callback_data": f"cancelrun:{run['id']}"}])
+    return rows
+
+
+def track_build(chat_id, message_id, run, root, susfs):
+    TRACKED_RUNS[chat_id] = {
+        "run_id": run["id"],
+        "message_id": message_id,
+        "root": root,
+        "susfs": susfs,
+        "frame": 0,
+        "last_update": 0,
+        "last_text": "",
+    }
+
+
+def monitor_builds():
+    now = time.monotonic()
+    for chat_id, item in list(TRACKED_RUNS.items()):
+        if now - item["last_update"] < MONITOR_INTERVAL:
+            continue
+        item["last_update"] = now
+        try:
+            run = get_run(item["run_id"])
+            if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
+                text = progress_message(run, item["root"], item["susfs"], item["frame"])
+                item["frame"] += 1
+                if text != item["last_text"]:
+                    send(chat_id, text, progress_keyboard(run), item["message_id"])
+                    item["last_text"] = text
+            else:
+                # The build workflow sends the authoritative compact completion/failure message.
+                # Leave the final progress card in place rather than creating a duplicate.
+                TRACKED_RUNS.pop(chat_id, None)
+        except Exception as exc:
+            print(f"build monitor failed for chat {chat_id}: {exc}", file=sys.stderr)
 
 
 def handle_message(message):
@@ -269,27 +394,23 @@ def handle_message(message):
     command = text.split()[0].split("@")[0].lower()
     if command in {"/start", "/kernel"}:
         if require_admin(chat_id, user_id):
-            send(chat_id, menu_text(), menu_keyboard())
+            send_fresh(chat_id, menu_text(), menu_keyboard())
     elif command == "/status":
         if not require_admin(chat_id, user_id):
             return
         run = active_run()
         if run:
-            send(chat_id, status_message(run), status_keyboard(run))
+            tracked = TRACKED_RUNS.get(chat_id)
+            if tracked and tracked["run_id"] == run["id"]:
+                text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+                tracked["frame"] += 1
+                send(chat_id, text, progress_keyboard(run), tracked["message_id"])
+                tracked["last_text"] = text
+            else:
+                msg = send_fresh(chat_id, progress_message(run, "ksu-next", False, 0), progress_keyboard(run))
+                track_build(chat_id, msg["message_id"], run, "ksu-next", False)
         else:
-            send(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
-    elif command == "/cancel":
-        if not require_admin(chat_id, user_id):
-            return
-        run = active_run()
-        if not run:
-            send(chat_id, "🟢 <b>No build is currently running.</b>")
-            return
-        try:
-            gh("POST", f"/repos/{REPO}/actions/runs/{run['id']}/cancel")
-            send(chat_id, f"🛑 <b>Cancellation requested.</b>\nRun #{esc(run.get('run_number', '?'))}")
-        except Exception as exc:
-            send(chat_id, f"❌ <b>Cancel failed</b>\n<code>{esc(exc)}</code>")
+            send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
 
 
 def handle_callback(query):
@@ -301,38 +422,34 @@ def handle_callback(query):
     user_id = (query.get("from") or {}).get("id")
     message_id = message.get("message_id")
 
-    # Answer the callback immediately; GitHub API work happens afterwards.
     answer_callback(query_id, "Processing…")
 
     if not is_admin(chat_id, user_id):
-        send(chat_id, "⛔ <b>Admin only.</b>")
+        send_fresh(chat_id, "⛔ <b>Admin only.</b>")
         return
 
     try:
         if data == "build":
-            send(
+            send_fresh(
                 chat_id,
-                "<b>🌳 Select Root Manager</b>\n\nChoose the root implementation for this build:",
+                "<b>🌳 SELECT ROOT</b>\n\nChoose the root implementation:",
                 root_keyboard(),
-                message_id,
             )
             return
 
         if data == "root:ksu-next":
-            send(
+            send_fresh(
                 chat_id,
-                "<b>🛡 Select SUSFS</b>\n\nKernelSU-Next selected.",
+                "<b>🛡 SELECT SUSFS</b>\n\nKernelSU-Next selected.",
                 susfs_keyboard("ksu-next"),
-                message_id,
             )
             return
 
         if data == "root:none":
-            send(
+            send_fresh(
                 chat_id,
                 build_text("none", False),
                 confirm_keyboard("none", False),
-                message_id,
             )
             return
 
@@ -342,96 +459,97 @@ def handle_callback(query):
                 raise APIError("invalid SUSFS selection")
             susfs = state == "on"
             PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
-            send(
-                chat_id,
-                build_text(root, susfs),
-                confirm_keyboard(root, susfs),
-                message_id,
-            )
+            send_fresh(chat_id, build_text(root, susfs), confirm_keyboard(root, susfs))
             return
 
         if data.startswith("confirm:"):
             _, root, state = data.split(":", 2)
             if root not in {"ksu-next", "none"} or state not in {"on", "off"}:
                 raise APIError("invalid build selection")
+
             pending = PENDING_CONFIGS.pop(chat_id, None)
             if pending:
                 root = pending["root"]
                 susfs = pending["susfs"]
             else:
                 susfs = root == "ksu-next" and state == "on"
-            print(f"Dispatching build: root={root}, susfs={susfs}", flush=True)
+
             run, existing = dispatch_build(root, susfs)
             if existing:
-                send(
+                send_fresh(
                     chat_id,
-                    f"⚠️ <b>A build is already running.</b>\nRun #{esc(existing.get('run_number', '?'))}",
+                    f"⚠️ <b>Build already running</b> · #{esc(existing.get('run_number', '?'))}",
                     status_keyboard(existing),
-                    message_id,
                 )
                 return
+
             if not run:
-                send(
+                send_fresh(
                     chat_id,
-                    "⚠️ <b>Build was dispatched, but GitHub has not created the run yet.</b>\nUse /status in a moment.",
+                    "⚠️ <b>Build dispatched</b>\nGitHub has not created the run yet.",
                     menu_keyboard(),
-                    message_id,
                 )
                 return
-            rows = []
+
+            rows = [[{"text": "🔄 Live Progress", "callback_data": "status"}]]
             if run.get("html_url"):
-                rows.append([{"text": "🔗 GitHub Actions", "url": run["html_url"]}])
-            rows.append([{"text": "📊 Status", "callback_data": "status"}])
-            send(
+                rows.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
+
+            msg = send_fresh(
                 chat_id,
                 (
-                    "🚀 <b>BUILD QUEUED</b>\n\n"
-                    "📱 Realme GT Neo 3 / zephyr\n"
-                    f"🌳 Root: <code>{esc('KernelSU-Next' if root == 'ksu-next' else 'No Root')}</code>\n"
-                    f"🛡 SUSFS: <code>{esc('Enabled' if susfs else 'Disabled')}</code>\n"
-                    f"🆔 Run: <code>#{esc(run.get('run_number', '?'))}</code>"
+                    "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
+                    "📱 GT Neo 3 · zephyr\n"
+                    f"🌳 {'KSU-Next' if root == 'ksu-next' else 'No Root'} · "
+                    f"🛡 {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
+                    f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
                 rows,
-                message_id,
             )
+            track_build(chat_id, msg["message_id"], run, root, susfs)
             return
 
         if data == "status":
             run = active_run()
             if run:
-                send(chat_id, status_message(run), status_keyboard(run), message_id)
+                tracked = TRACKED_RUNS.get(chat_id)
+                if tracked and tracked["run_id"] == run["id"]:
+                    text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+                    tracked["frame"] += 1
+                    send(chat_id, text, progress_keyboard(run), message_id)
+                    tracked["last_text"] = text
+                else:
+                    msg = send_fresh(chat_id, progress_message(run, "ksu-next", False, 0), progress_keyboard(run))
+                    track_build(chat_id, msg["message_id"], run, "ksu-next", False)
             else:
-                send(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard(), message_id)
+                send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
             return
 
         if data.startswith("cancelrun:"):
             run_id = data.split(":", 1)[1]
             gh("POST", f"/repos/{REPO}/actions/runs/{run_id}/cancel")
-            send(chat_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard(), message_id)
+            TRACKED_RUNS.pop(chat_id, None)
+            send_fresh(chat_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard())
             return
 
         if data == "cancel":
-            send(chat_id, menu_text(), menu_keyboard(), message_id)
+            send_fresh(chat_id, menu_text(), menu_keyboard())
             return
 
     except Exception as exc:
         print(f"callback {data!r} failed: {exc}", file=sys.stderr)
-        send(chat_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard(), message_id)
+        send_fresh(chat_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard())
 
 
 def process_updates(updates):
     for update in updates:
-        # One bad/stale update must not stop the rest of the queue.
         try:
             if "message" in update:
                 handle_message(update["message"])
             elif "callback_query" in update:
                 handle_callback(update["callback_query"])
         except Exception as exc:
-            print(
-                f"update {update.get('update_id', '?')} failed: {exc}",
-                file=sys.stderr,
-            )
+            print(f"update {update.get('update_id', '?')} failed: {exc}", file=sys.stderr)
 
 
 def main():
@@ -442,15 +560,14 @@ def main():
     except Exception as exc:
         print(f"deleteWebhook warning: {exc}", file=sys.stderr)
 
-    # GitHub scheduled workflows can only start every 5 minutes. Stay alive
-    # and long-poll Telegram during this run so messages/buttons are handled
-    # within seconds instead of waiting for the next scheduled runner.
-    poll_until = time.monotonic() + 240
+    # Long-lived worker: stay online for ~5h40m, safely below GitHub's 6h
+    # GitHub-hosted job limit. A later scheduled/manual worker can take over.
+    deadline = time.monotonic() + WORKER_SECONDS
     offset = 0
 
-    while time.monotonic() < poll_until:
-        remaining = max(1, int(poll_until - time.monotonic()))
-        poll_timeout = min(20, remaining)
+    while time.monotonic() < deadline:
+        remaining = max(1, int(deadline - time.monotonic()))
+        poll_timeout = min(POLL_TIMEOUT, remaining)
 
         try:
             updates = tg(
@@ -467,17 +584,16 @@ def main():
             time.sleep(2)
             continue
 
-        if not updates:
-            continue
+        if updates:
+            print(f"Processing {len(updates)} Telegram update(s).", flush=True)
+            process_updates(updates)
+            offset = max(update["update_id"] for update in updates) + 1
 
-        print(f"Processing {len(updates)} Telegram update(s).", flush=True)
-        process_updates(updates)
+        try:
+            monitor_builds()
+        except Exception as exc:
+            print(f"monitor loop failed: {exc}", file=sys.stderr)
 
-        # Advancing offset confirms the batch even if one update failed.
-        offset = max(update["update_id"] for update in updates) + 1
-
-    # Confirm the final batch before the runner exits. Without this, a final
-    # update arriving near shutdown could be processed again next run.
     try:
         tg(
             "getUpdates",
@@ -491,7 +607,7 @@ def main():
     except Exception as exc:
         print(f"final Telegram confirmation failed: {exc}", file=sys.stderr)
 
-    print("Telegram polling window finished.", flush=True)
+    print("Telegram long-polling window finished.", flush=True)
     return 0
 
 
