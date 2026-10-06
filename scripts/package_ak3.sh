@@ -4,14 +4,16 @@ set -euo pipefail
 KERNEL_DIR="${1:?kernel source directory required}"
 OUT_DIR="${2:?build output directory required}"
 
-IMAGE="$OUT_DIR/../kernel-5.10/arch/arm64/boot/Image.gz"
+# build/build.sh uses O="$OUT_DIR/kernel-5.10", so the generated image lives there.
+IMAGE="$OUT_DIR/kernel-5.10/arch/arm64/boot/Image.gz"
+[ -f "$IMAGE" ] || IMAGE="$OUT_DIR/../kernel-5.10/arch/arm64/boot/Image.gz"
 [ -f "$IMAGE" ] || IMAGE="$KERNEL_DIR/arch/arm64/boot/Image.gz"
 [ -f "$IMAGE" ] || { echo "Image.gz not found"; exit 1; }
 
 mkdir -p artifacts
-TS="\$(date -u +%Y%m%d-%H%M)"
+TS="$(date -u +%Y%m%d-%H%M)"
 NAME="Zephyr-KSU-Next-SUSFS-${TS}"
-WORK="\$(mktemp -d)"
+WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # AK3 directory can be populated in the repository without kernel source files.
