@@ -19,7 +19,7 @@ import urllib.request
 TG_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
-WORKFLOW = os.environ.get("GITHUB_WORKFLOW", "376656950")
+WORKFLOW = "376656950"
 BRANCH = os.environ.get("GITHUB_REF", "main")
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
