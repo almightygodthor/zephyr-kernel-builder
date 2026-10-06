@@ -11,6 +11,7 @@ import html
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -87,9 +88,17 @@ def send(chat_id, text, keyboard=None, message_id=None):
     }
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
+
+    # Editing is optional. A stale callback/deleted message must never kill
+    # the worker; fall back to sending a fresh message.
     if message_id is not None:
         payload["message_id"] = message_id
-        return tg("editMessageText", payload)
+        try:
+            return tg("editMessageText", payload)
+        except APIError as exc:
+            print(f"message edit failed, sending a fresh message: {exc}", file=sys.stderr)
+
+    payload.pop("message_id", None)
     return tg("sendMessage", payload)
 
 
@@ -285,10 +294,11 @@ def handle_callback(query):
     user_id = (query.get("from") or {}).get("id")
     message_id = message.get("message_id")
 
+    # Answer the callback immediately; GitHub API work happens afterwards.
     answer_callback(query_id, "Processing…")
 
     if not is_admin(chat_id, user_id):
-        answer_callback(query_id, "Admin only.", show_alert=True)
+        send(chat_id, "⛔ <b>Admin only.</b>")
         return
 
     try:
@@ -397,10 +407,17 @@ def handle_callback(query):
 
 def process_updates(updates):
     for update in updates:
-        if "message" in update:
-            handle_message(update["message"])
-        elif "callback_query" in update:
-            handle_callback(update["callback_query"])
+        # One bad/stale update must not stop the rest of the queue.
+        try:
+            if "message" in update:
+                handle_message(update["message"])
+            elif "callback_query" in update:
+                handle_callback(update["callback_query"])
+        except Exception as exc:
+            print(
+                f"update {update.get('update_id', '?')} failed: {exc}",
+                file=sys.stderr,
+            )
 
 
 def main():
@@ -411,39 +428,42 @@ def main():
     except Exception as exc:
         print(f"deleteWebhook warning: {exc}", file=sys.stderr)
 
-    try:
-        updates = tg(
-            "getUpdates",
-            {
-                "offset": 0,
-                "timeout": 5,
-                "allowed_updates": ["message", "callback_query"],
-            },
-            timeout=12,
-        ) or []
+    # GitHub scheduled workflows can only start every 5 minutes. Stay alive
+    # and long-poll Telegram during this run so messages/buttons are handled
+    # within seconds instead of waiting for the next scheduled runner.
+    poll_until = time.monotonic() + 240
+    offset = 0
+
+    while time.monotonic() < poll_until:
+        remaining = max(1, int(poll_until - time.monotonic()))
+        poll_timeout = min(20, remaining)
+
+        try:
+            updates = tg(
+                "getUpdates",
+                {
+                    "offset": offset,
+                    "timeout": poll_timeout,
+                    "allowed_updates": ["message", "callback_query"],
+                },
+                timeout=poll_timeout + 10,
+            ) or []
+        except Exception as exc:
+            print(f"Telegram polling failed: {exc}", file=sys.stderr)
+            time.sleep(2)
+            continue
 
         if not updates:
-            print("No pending Telegram updates.", flush=True)
-            return 0
+            continue
 
         print(f"Processing {len(updates)} Telegram update(s).", flush=True)
         process_updates(updates)
 
-        last_id = max(update["update_id"] for update in updates)
-        tg(
-            "getUpdates",
-            {
-                "offset": last_id + 1,
-                "timeout": 0,
-                "allowed_updates": ["message", "callback_query"],
-            },
-            timeout=5,
-        )
-        print(f"Confirmed updates through {last_id}.", flush=True)
-        return 0
-    except Exception as exc:
-        print(f"worker failed: {exc}", file=sys.stderr)
-        return 1
+        # Advancing offset confirms the batch even if one update failed.
+        offset = max(update["update_id"] for update in updates) + 1
+
+    print("Telegram polling window finished.", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
