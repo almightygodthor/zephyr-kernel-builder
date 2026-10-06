@@ -88,6 +88,7 @@ jobs:
 
       - name: Verify source tree
         run: |
+          set -e
           test -f workspace/build.config
           test -f workspace/kernel-5.10/build.config.oplus6895
           test -f workspace/kernel-5.10/arch/arm64/configs/gki_defconfig
