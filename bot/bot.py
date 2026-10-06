@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 TG_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
-WORKFLOW = "376656950"
+BUILD_WORKFLOW = "376656950"
+BOT_WORKFLOW = "telegram-bot.yml"
 BRANCH = os.environ.get("GITHUB_REF", "main")
 
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
@@ -105,6 +106,28 @@ def send_fresh(chat_id, text, keyboard=None):
     return send(chat_id, text, keyboard)
 
 
+def edit_message(chat_id, message_id, text, keyboard=None):
+    """Edit an existing Telegram message without ever creating a replacement."""
+    if message_id is None:
+        return send_fresh(chat_id, text, keyboard)
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if keyboard:
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+    try:
+        return tg("editMessageText", payload)
+    except APIError as exc:
+        # Telegram returns this when the selected screen is already identical.
+        if "message is not modified" in str(exc).lower():
+            return None
+        raise
+
+
 def answer_callback(query_id, text="", show_alert=False):
     try:
         tg("answerCallbackQuery", {
@@ -188,7 +211,7 @@ def build_text(root, susfs):
 def active_run():
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs"
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/runs"
         f"?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=20",
     )
     for run in data.get("workflow_runs", []):
@@ -208,7 +231,7 @@ def dispatch_build(root, susfs):
 
     result = gh(
         "POST",
-        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/dispatches",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/dispatches",
         {
             "ref": BRANCH,
             "inputs": {
@@ -226,7 +249,7 @@ def dispatch_build(root, susfs):
 
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs"
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/runs"
         f"?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=10",
     )
     runs = data.get("workflow_runs", [])
@@ -372,7 +395,7 @@ def monitor_builds():
                 text = progress_message(run, item["root"], item["susfs"], item["frame"])
                 item["frame"] += 1
                 if text != item["last_text"]:
-                    send(chat_id, text, progress_keyboard(run), item["message_id"])
+                    edit_message(chat_id, item["message_id"], text, progress_keyboard(run))
                     item["last_text"] = text
             else:
                 # The build workflow sends the authoritative compact completion/failure message.
@@ -394,7 +417,7 @@ def handle_message(message):
     command = text.split()[0].split("@")[0].lower()
     if command in {"/start", "/kernel"}:
         if require_admin(chat_id, user_id):
-            send_fresh(chat_id, menu_text(), menu_keyboard())
+            edit_message(chat_id, message_id, menu_text(), menu_keyboard())
     elif command == "/status":
         if not require_admin(chat_id, user_id):
             return
@@ -425,7 +448,7 @@ def handle_callback(query):
     answer_callback(query_id, "Processing…")
 
     if not is_admin(chat_id, user_id):
-        send_fresh(chat_id, "⛔ <b>Admin only.</b>")
+        edit_message(chat_id, message_id, "⛔ <b>Admin only.</b>")
         return
 
     try:
@@ -459,7 +482,7 @@ def handle_callback(query):
                 raise APIError("invalid SUSFS selection")
             susfs = state == "on"
             PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
-            send_fresh(chat_id, build_text(root, susfs), confirm_keyboard(root, susfs))
+            edit_message(chat_id, message_id, build_text(root, susfs), confirm_keyboard(root, susfs))
             return
 
         if data.startswith("confirm:"):
@@ -516,7 +539,7 @@ def handle_callback(query):
                 if tracked and tracked["run_id"] == run["id"]:
                     text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
                     tracked["frame"] += 1
-                    send(chat_id, text, progress_keyboard(run), message_id)
+                    edit_message(chat_id, message_id, text, progress_keyboard(run))
                     tracked["last_text"] = text
                 else:
                     msg = send_fresh(chat_id, progress_message(run, "ksu-next", False, 0), progress_keyboard(run))
@@ -529,11 +552,11 @@ def handle_callback(query):
             run_id = data.split(":", 1)[1]
             gh("POST", f"/repos/{REPO}/actions/runs/{run_id}/cancel")
             TRACKED_RUNS.pop(chat_id, None)
-            send_fresh(chat_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard())
+            edit_message(chat_id, message_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard())
             return
 
         if data == "cancel":
-            send_fresh(chat_id, menu_text(), menu_keyboard())
+            edit_message(chat_id, message_id, menu_text(), menu_keyboard())
             return
 
     except Exception as exc:
@@ -547,7 +570,7 @@ def schedule_next_worker():
     try:
         gh(
             "POST",
-            f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/dispatches",
+            f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BOT_WORKFLOW, safe='')}/dispatches",
             {"ref": BRANCH},
         )
         print("Queued next Telegram worker.", flush=True)
