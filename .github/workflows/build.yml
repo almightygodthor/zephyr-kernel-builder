@@ -15,6 +15,11 @@ on:
         required: true
         default: true
         type: boolean
+      build_ak3:
+        description: Package AnyKernel3 ZIP
+        required: true
+        default: true
+        type: boolean
   push:
     branches:
       - main
@@ -28,7 +33,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MANIFEST_REPO: https://github.com/almightygodthor/zephyr-kernel-builder.git
   KERNEL_REPO: https://github.com/oplus-mt6895/android_kernel_oplus_mt6895.git
   KERNEL_BRANCH: lineage-24.0
   MODULES_REPO: https://github.com/oplus-mt6895/android_kernel_modules_oplus_mt6895.git
@@ -40,37 +44,31 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+
     steps:
       - name: Checkout builder
         uses: actions/checkout@v4
 
-      - name: Notify build started
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ID: ${{ github.run_id }}
-          SHA: ${{ github.sha }}
-        run: python3 scripts/telegram_notify.py started
-
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git curl ca-certificates python3 python3-pip repo rsync ccache bc bison flex build-essential libssl-dev libelf-dev pahole zip unzip
+          sudo apt-get install -y             git curl ca-certificates python3 python3-pip repo rsync ccache             bc bison flex build-essential libssl-dev libelf-dev pahole             zip unzip
 
       - name: Sync Android kernel build manifest
         run: |
           mkdir -p workspace
           cd workspace
-          repo init -u https://android.googlesource.com/kernel/manifest -b master-kernel-build-2021 --depth=1
+          repo init -u https://android.googlesource.com/kernel/manifest             -b master-kernel-build-2021 --depth=1
+          mkdir -p .repo/local_manifests
           cp ../manifests/zephyr.xml .repo/local_manifests/zephyr.xml
-          repo sync -c -j\$(nproc)
+          repo sync -c -j$(nproc)
 
       - name: Verify source tree
         run: |
           test -f workspace/kernel-5.10/build.config.oplus6895
           test -f workspace/kernel-5.10/arch/arm64/configs/oplus6895_defconfig
-          git -C workspace/kernel-5.10 status --short
           git -C workspace/kernel-5.10 rev-parse HEAD
+          git -C workspace/kernel-5.10 status --short
 
       - name: Integrate KernelSU-Next and SUSFS
         env:
@@ -81,16 +79,15 @@ jobs:
 
       - name: Build Image.gz
         working-directory: workspace
-        env:
-          KERNEL_DIR: kernel-5.10
         run: |
           export ROOT_DIR="$PWD"
           export OUT_DIR="$ROOT_DIR/out"
           export BUILD_CONFIG="$ROOT_DIR/kernel-5.10/build.config.oplus6895"
           ulimit -n 65535
-          bash kernel-5.10/build/build.sh
+          bash build/build.sh
 
       - name: Package AnyKernel3
+        if: ${{ inputs.build_ak3 != false }}
         run: |
           chmod +x scripts/package_ak3.sh
           scripts/package_ak3.sh workspace/kernel-5.10 workspace/out
@@ -102,25 +99,18 @@ jobs:
           path: |
             artifacts/*.zip
             artifacts/Image.gz
+            artifacts/BUILD_NAME
+            artifacts/BUILD_TIME_UTC
           if-no-files-found: error
           retention-days: 14
 
-      - name: Notify build success
-        if: success()
+      - name: Notify Telegram
+        if: always()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_ID: ${{ github.run_id }}
           RUN_NUMBER: ${{ github.run_number }}
           SHA: ${{ github.sha }}
-        run: python3 scripts/telegram_notify.py success
-
-      - name: Notify build failure
-        if: failure()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_NUMBER: ${{ github.run_number }}
-          SHA: ${{ github.sha }}
-        run: python3 scripts/telegram_notify.py failure
+          JOB_STATUS: ${{ job.status }}
+        run: python3 scripts/telegram_notify.py "${JOB_STATUS}"
