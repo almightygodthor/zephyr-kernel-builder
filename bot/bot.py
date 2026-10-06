@@ -367,7 +367,7 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
         f"<b>⚡ ZEPHYR · BUILDING {spin}</b>\n\n"
         "📱 GT Neo 3 · zephyr\n"
         "🧩 Linux 5.10 · MT6895\n"
-        f"🌳 {root_label} · ඞ {susfs_label} · 📦 AK3\n\n"
+        f"🔑 {root_label} · ඞ {susfs_label} · 📦 AK3\n\n"
         f"{spin} <b>{esc(stage)}</b>\n"
         f"<code>[{bar}] {pct}%</code>\n"
         f"⏱ {elapsed_text(run)} · 🆔 #{esc(run.get('run_number', '?'))}"
@@ -574,7 +574,7 @@ def handle_callback(query):
                 (
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
-                    f"🌳 {'KSU-Next' if root == 'ksu-next' else 'No Root'} · "
+                    f"🔑 {'KSU-Next' if root == 'ksu-next' else 'No Root'} · "
                     f"ඞ {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
                     f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
