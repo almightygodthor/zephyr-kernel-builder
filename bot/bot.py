@@ -18,6 +18,7 @@ BUILD_WORKFLOW = "376656950"
 BOT_WORKFLOW = "telegram-bot.yml"
 RELEASE_WORKFLOW = "publish-release.yml"
 BRANCH = os.environ.get("GITHUB_REF", "main")
+DELETE_OWNER_ID = 7577854738
 
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
 WORKER_SECONDS = 340 * 60
@@ -723,6 +724,9 @@ def handle_callback(query):
             return
 
         if data.startswith("deleteconfirm:"):
+            if user_id != DELETE_OWNER_ID:
+                answer_callback(query_id, "Only the bot owner can delete builds.", True)
+                return
             run_id = data.split(":", 1)[1]
             gh("DELETE", f"/repos/{REPO}/actions/runs/{run_id}")
             TRACKED_RUNS.pop(chat_id, None)
@@ -735,6 +739,9 @@ def handle_callback(query):
             return
 
         if data.startswith("deletebuild:"):
+            if user_id != DELETE_OWNER_ID:
+                answer_callback(query_id, "Only the bot owner can delete builds.", True)
+                return
             run_id = data.split(":", 1)[1]
             run = get_run(run_id)
             run_number = run.get("run_number", "?")
