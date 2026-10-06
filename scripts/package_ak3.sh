@@ -16,9 +16,9 @@ NAME="Zephyr-KSU-Next-SUSFS-${TS}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# AK3 directory can be populated in the repository without kernel source files.
+# Use Thor's maintained AnyKernel3 fork.
 if [ ! -d anykernel3 ]; then
-  git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel3
+  git clone --depth=1 https://github.com/almightygodthor/AnyKernel3.git anykernel3
 fi
 
 rsync -a --delete anykernel3/ "$WORK/"
