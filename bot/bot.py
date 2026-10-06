@@ -541,6 +541,20 @@ def handle_callback(query):
         send_fresh(chat_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard())
 
 
+def schedule_next_worker():
+    # workflow_dispatch is one of the events that GITHUB_TOKEN is allowed
+    # to trigger, so the worker can hand off to a fresh runner before exit.
+    try:
+        gh(
+            "POST",
+            f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/dispatches",
+            {"ref": BRANCH},
+        )
+        print("Queued next Telegram worker.", flush=True)
+    except Exception as exc:
+        print(f"Could not queue next Telegram worker: {exc}", file=sys.stderr)
+
+
 def process_updates(updates):
     for update in updates:
         try:
@@ -593,6 +607,8 @@ def main():
             monitor_builds()
         except Exception as exc:
             print(f"monitor loop failed: {exc}", file=sys.stderr)
+
+    schedule_next_worker()
 
     try:
         tg(
