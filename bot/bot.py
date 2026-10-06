@@ -181,7 +181,7 @@ def menu_keyboard():
 
 def root_keyboard():
     return [
-        [{"text": "🌳 KernelSU-Next", "callback_data": "root:ksu-next"}],
+        [{"text": "🌱 KernelSU-Next", "callback_data": "root:ksu-next"}],
         [{"text": "⚪ No Root", "callback_data": "root:none"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
@@ -506,7 +506,7 @@ def handle_callback(query):
         if data == "build":
             edit_message(
                 chat_id, message_id,
-                "<b>🌳 SELECT ROOT</b>\n\nChoose the root implementation:",
+                "<b>🌱 SELECT ROOT</b>\n\nChoose the root implementation:",
                 root_keyboard(),
             )
             return
