@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - ksu-next
+          - none
       susfs:
         description: Enable SUSFS
         required: true
@@ -22,7 +23,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 concurrency:
@@ -128,7 +129,7 @@ jobs:
           SUSFS_ENABLED: ${{ inputs.susfs || 'true' }}
         run: |
           chmod +x scripts/integrate_ksu_susfs.sh
-          scripts/integrate_ksu_susfs.sh workspace/kernel-5.10 "${SUSFS_ENABLED}"
+          scripts/integrate_ksu_susfs.sh workspace/kernel-5.10 "${{ inputs.root }}" "${SUSFS_ENABLED}"
 
       - name: Build Image.gz
         working-directory: workspace
@@ -151,7 +152,83 @@ jobs:
         if: ${{ inputs.build_ak3 != false }}
         run: |
           chmod +x scripts/package_ak3.sh
-          scripts/package_ak3.sh workspace/kernel-5.10 workspace/out
+          scripts/package_ak3.sh workspace/kernel-5.10 workspace/out "${{ inputs.root }}" "${{ inputs.susfs }}"
+
+      - name: Prepare release metadata
+        if: ${{ success() && inputs.build_ak3 != false }}
+        working-directory: workspace
+        env:
+          ROOT_IMPL: ${{ inputs.root }}
+          SUSFS_ENABLED: ${{ inputs.susfs }}
+        run: |
+          mkdir -p ../release
+          IMAGE="out/kernel-5.10/arch/arm64/boot/Image.gz"
+          ZIP="$(find ../artifacts -maxdepth 1 -type f -name "*.zip" -print -quit)"
+          test -n "$ZIP" -a -f "$ZIP"
+          IMAGE_SHA256="$(sha256sum "$IMAGE" | awk "{print \$1}")"
+          ZIP_SHA256="$(sha256sum "$ZIP" | awk "{print \$1}")"
+          ZIP_SIZE="$(du -h "$ZIP" | awk "{print \$1}")"
+          KSU_COMMIT="$(git -C kernel-5.10/KernelSU-Next rev-parse HEAD 2>/dev/null || echo none)"
+          KSU_REF="dev-susfs"
+          SUSFS_COMMIT="$(git -C kernel-5.10/susfs4ksu rev-parse HEAD 2>/dev/null || echo disabled)"
+          SUSFS_REF="gki-android12-5.10"
+          BUILD_TS="$(date -u +%Y%m%d-%H%M%S)"
+          TAG="zephyr-run${GITHUB_RUN_NUMBER}"
+          RELEASE_TITLE="Zephyr Kernel ${BUILD_TS} — ${ROOT_IMPL}$( [ "$SUSFS_ENABLED" = "true" ] && printf " + SUSFS" )"
+          printf "%s\n" "$TAG" > ../release/TAG
+          printf "%s\n" "$RELEASE_TITLE" > ../release/TITLE
+          printf "%s\n" "$(basename "$ZIP")" > ../release/ZIP_NAME
+          printf "%s\n" "$ZIP_SHA256" > ../release/ZIP_SHA256
+          printf "%s\n" "$ZIP_SIZE" > ../release/ZIP_SIZE
+          printf "%s\n" "$IMAGE_SHA256" > ../release/IMAGE_SHA256
+          cat > ../release/RELEASE.md <<EOF
+          ## ⚡ Zephyr Kernel — Realme GT Neo 3
+
+          **Device:** Realme GT Neo 3 (`zephyr`)  
+          **SoC:** MediaTek MT6895  
+          **Kernel:** Linux 5.10  
+          **Kernel branch:** `lineage-24.0`
+
+          ### 🔧 Configuration
+
+          - **Root:** `${ROOT_IMPL}`
+          - **SUSFS:** `$SUSFS_ENABLED`
+          - **AnyKernel3:** `almightygodthor/AnyKernel3`
+          - **Build:** GitHub Actions #${GITHUB_RUN_NUMBER}
+
+          ### 📦 Kernel ZIP
+
+          **File:** `$(basename "$ZIP")`  
+          **Size:** `$ZIP_SIZE`  
+          **SHA256:** `$ZIP_SHA256`
+
+          ### 🧩 Image.gz
+
+          **SHA256:** `$IMAGE_SHA256`
+
+          ### 🌳 KernelSU-Next
+
+          **Integration ref:** `$KSU_REF`  
+          **Commit:** `$KSU_COMMIT`  
+          **Manager:** https://github.com/KernelSU-Next/KernelSU-Next/releases
+
+          ### 🛡 SUSFS
+
+          **Integration ref:** `$SUSFS_REF`  
+          **Commit:** `$SUSFS_COMMIT`  
+          **Module:** https://github.com/sidex15/susfs4ksu-module/releases
+          EOF
+
+      - name: Create GitHub Release
+        if: ${{ success() && inputs.build_ak3 != false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: release
+        run: |
+          ZIP="../artifacts/$(cat ZIP_NAME)"
+          gh release create "$(cat TAG)" "$ZIP" "../artifacts/Image.gz" \
+            --title "$(cat TITLE)" \
+            --notes-file RELEASE.md
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
@@ -174,4 +251,10 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
           SHA: ${{ github.sha }}
           JOB_STATUS: ${{ job.status }}
+          ROOT_IMPL: ${{ inputs.root }}
+          SUSFS_ENABLED: ${{ inputs.susfs }}
+          RELEASE_URL: ${{ env.RELEASE_URL }}
+          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
+          ARTIFACT_SIZE: ${{ env.ARTIFACT_SIZE }}
+          ARTIFACT_SHA256: ${{ env.ARTIFACT_SHA256 }}
         run: python3 scripts/telegram_notify.py "${JOB_STATUS}"

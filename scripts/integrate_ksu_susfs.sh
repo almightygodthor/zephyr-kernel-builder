@@ -2,9 +2,20 @@
 set -euo pipefail
 
 KERNEL_DIR="${1:?kernel source directory required}"
-SUSFS_ENABLED="${2:-true}"
+ROOT_IMPL="${2:-ksu-next}"
+SUSFS_ENABLED="${3:-true}"
 
 cd "$KERNEL_DIR"
+
+if [ "$ROOT_IMPL" = "none" ]; then
+  echo "==> Root integration disabled"
+  exit 0
+fi
+
+if [ "$ROOT_IMPL" != "ksu-next" ]; then
+  echo "Unsupported root implementation: $ROOT_IMPL"
+  exit 1
+fi
 
 # KernelSU-Next + SUSFS integration for the MT6895 5.10 AOSP-style tree.
 # The manager fork is the known SUSFS-compatible dev-susfs tree. SUSFS itself
