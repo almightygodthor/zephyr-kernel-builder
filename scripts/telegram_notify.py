@@ -84,7 +84,7 @@ def main() -> int:
             f"🌳 {html.escape(root_label)} · 🛡 {html.escape(susfs_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
-        keyboard = [[{"text": "🔄 Live Progress", "url": actions_url}]]
+        keyboard = [[{"text": "🔄 Live Progress", "callback_data": "status"}], [{"text": "🔗 GitHub Actions ↗", "url": actions_url}]]
     else:
         body = (
             f"<b>{icon} ZEPHYR · BUILD {html.escape(state.upper())}</b>\n\n"
