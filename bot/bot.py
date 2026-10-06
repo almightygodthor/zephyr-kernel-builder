@@ -16,6 +16,7 @@ GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
 BUILD_WORKFLOW = "376656950"
 BOT_WORKFLOW = "telegram-bot.yml"
+RELEASE_WORKFLOW = "publish-release.yml"
 BRANCH = os.environ.get("GITHUB_REF", "main")
 
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
@@ -231,6 +232,38 @@ def active_run():
 def get_run(run_id):
     return gh("GET", f"/repos/{REPO}/actions/runs/{run_id}")
 
+def release_for_run(run_number):
+    try:
+        return gh("GET", f"/repos/{REPO}/releases/tags/zephyr-run{run_number}")
+    except APIError as exc:
+        if "HTTP 404" in str(exc):
+            return None
+        raise
+
+
+def successful_build_runs(limit=10):
+    data = gh(
+        "GET",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/runs"
+        f"?branch={urllib.parse.quote(BRANCH, safe='')}&status=success&per_page={limit}",
+    )
+    return data.get("workflow_runs", [])
+
+
+def dispatch_release(run_id, run_number):
+    return gh(
+        "POST",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(RELEASE_WORKFLOW, safe='')}/dispatches",
+        {
+            "ref": BRANCH,
+            "inputs": {
+                "run_id": str(run_id),
+                "run_number": str(run_number),
+            },
+            "return_run_details": True,
+        },
+    )
+
 
 def dispatch_build(root, susfs):
     active = active_run()
@@ -374,6 +407,23 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
     )
 
 
+def publish_keyboard(run_id, run_number):
+    return [
+        [{"text": "🚀 Publish GitHub Release", "callback_data": f"publish:{run_id}:{run_number}"}],
+        [{"text": "🧪 No — Actions only", "callback_data": f"skip:{run_id}:{run_number}"}],
+    ]
+
+
+def release_list_keyboard(runs):
+    rows = []
+    for run in runs[:8]:
+        rows.append([{
+            "text": f"🚀 Run #{run.get('run_number', '?')} · Publish",
+            "callback_data": f"publish:{run.get('id')}:{run.get('run_number')}",
+        }])
+    return rows
+
+
 def progress_keyboard(run):
     rows = [[{"text": "🔄 Refresh", "callback_data": "status"}]]
     if run.get("html_url"):
@@ -443,7 +493,29 @@ def handle_message(message):
     command = text.split()[0].split("@")[0].lower()
     if command in {"/start", "/kernel"}:
         if require_admin(chat_id, user_id):
-            edit_message(chat_id, message_id, menu_text(), menu_keyboard())
+            target_id = LAST_BOT_MESSAGES.get(chat_id)
+            if target_id:
+                edit_message(chat_id, target_id, menu_text(), menu_keyboard())
+            else:
+                send_fresh(chat_id, menu_text(), menu_keyboard())
+    elif command == "/release":
+        if not require_admin(chat_id, user_id):
+            return
+        runs = []
+        for run in successful_build_runs():
+            if not release_for_run(run.get("run_number")):
+                runs.append(run)
+        target_id = LAST_BOT_MESSAGES.get(chat_id)
+        if runs:
+            text = "<b>📦 PUBLISH A BUILD</b>\n\nChoose a successful build to publish:"
+            kb = release_list_keyboard(runs)
+        else:
+            text = "🟢 <b>No unpublished successful builds found.</b>"
+            kb = menu_keyboard()
+        if target_id:
+            edit_message(chat_id, target_id, text, kb)
+        else:
+            send_fresh(chat_id, text, kb)
     elif command == "/status":
         if not require_admin(chat_id, user_id):
             return
@@ -612,6 +684,40 @@ def handle_callback(query):
                         "🟢 <b>No build is currently running.</b>",
                         menu_keyboard(),
                     )
+            return
+
+        if data.startswith("publish:"):
+            _, run_id, run_number = data.split(":", 2)
+            existing = release_for_run(run_number)
+            if existing:
+                release_url = existing.get("html_url", "")
+                edit_message(
+                    chat_id, message_id,
+                    "<b>📦 RELEASE ALREADY PUBLISHED</b>\n\n"
+                    f"Run <code>#{esc(run_number)}</code> is already released.",
+                    [[{"text": "📦 GitHub Release ↗", "url": release_url}]] if release_url else menu_keyboard(),
+                )
+                return
+            dispatch_release(run_id, run_number)
+            edit_message(
+                chat_id, message_id,
+                "<b>🚀 PUBLISHING RELEASE…</b>\n\n"
+                f"Build Run <code>#{esc(run_number)}</code> is being published to GitHub Releases.",
+                [[{"text": "🔗 Build Actions ↗", "url": f"https://github.com/{REPO}/actions/runs/{run_id}"}]],
+            )
+            return
+
+        if data.startswith("skip:"):
+            _, run_id, run_number = data.split(":", 2)
+            edit_message(
+                chat_id, message_id,
+                "<b>🧪 ACTIONS-ONLY BUILD</b>\n\n"
+                "Release not published. Test/download the artifact from the Actions run.",
+                [
+                    [{"text": "🧪 Actions Run / Download", "url": f"https://github.com/{REPO}/actions/runs/{run_id}"}],
+                    [{"text": "🚀 Publish Later", "callback_data": f"publish:{run_id}:{run_number}"}],
+                ],
+            )
             return
 
         if data.startswith("cancelrun:"):
