@@ -428,16 +428,34 @@ def handle_message(message):
         if not require_admin(chat_id, user_id):
             return
         run = active_run()
+        target_id = LAST_BOT_MESSAGES.get(chat_id)
         if run:
             tracked = TRACKED_RUNS.get(chat_id)
             if tracked and tracked["run_id"] == run["id"]:
                 text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
                 tracked["frame"] += 1
-                send(chat_id, text, progress_keyboard(run), tracked["message_id"])
+                edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
                 tracked["last_text"] = text
+            elif target_id:
+                edit_message(
+                    chat_id, target_id,
+                    progress_message(run, "ksu-next", False, 0),
+                    progress_keyboard(run),
+                )
+                track_build(chat_id, target_id, run, "ksu-next", False)
             else:
-                msg = send_fresh(chat_id, progress_message(run, "ksu-next", False, 0), progress_keyboard(run))
+                msg = send_fresh(
+                    chat_id,
+                    progress_message(run, "ksu-next", False, 0),
+                    progress_keyboard(run),
+                )
                 track_build(chat_id, msg["message_id"], run, "ksu-next", False)
+        elif target_id:
+            edit_message(
+                chat_id, target_id,
+                "🟢 <b>No build is currently running.</b>",
+                menu_keyboard(),
+            )
         else:
             send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
 
