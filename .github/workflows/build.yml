@@ -236,6 +236,7 @@ jobs:
           ROOT_IMPL: ${{ inputs.root }}
           SUSFS_ENABLED: ${{ inputs.susfs }}
           RELEASE_URL: ${{ env.RELEASE_URL }}
+          DOWNLOAD_URL: ${{ env.DOWNLOAD_URL }}
           ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
           ARTIFACT_SIZE: ${{ env.ARTIFACT_SIZE }}
           ARTIFACT_SHA256: ${{ env.ARTIFACT_SHA256 }}
