@@ -99,9 +99,10 @@ def send(chat_id, text, keyboard=None, message_id=None):
             LAST_BOT_MESSAGES[chat_id] = message_id
             return result
         except APIError as exc:
-            print(f"message edit failed, sending fresh message: {exc}", file=sys.stderr)
+            if "message is not modified" not in str(exc).lower():
+                print(f"message edit failed: {exc}", file=sys.stderr)
+            return None
 
-    payload.pop("message_id", None)
     return tg("sendMessage", payload)
 
 
@@ -341,7 +342,7 @@ def elapsed_text(run):
     if not started:
         return "--:--"
     seconds = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
-    return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}"
+    return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}:{seconds % 60:02d}"
 
 
 def progress_message(run, root, susfs, frame):
@@ -427,38 +428,45 @@ def handle_message(message):
     elif command == "/status":
         if not require_admin(chat_id, user_id):
             return
-        run = active_run()
-        target_id = LAST_BOT_MESSAGES.get(chat_id)
-        if run:
-            tracked = TRACKED_RUNS.get(chat_id)
-            if tracked and tracked["run_id"] == run["id"]:
-                text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
-                tracked["frame"] += 1
-                edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
-                tracked["last_text"] = text
+        tracked = TRACKED_RUNS.get(chat_id)
+        run = None
+        if tracked:
+            try:
+                run = get_run(tracked["run_id"])
+            except Exception as exc:
+                print(f"tracked run lookup failed: {exc}", file=sys.stderr)
+
+        if run and run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
+            text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+            tracked["frame"] += 1
+            edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
+            tracked["last_text"] = text
+        else:
+            run = active_run()
+            target_id = tracked["message_id"] if tracked else LAST_BOT_MESSAGES.get(chat_id)
+            if run:
+                if target_id:
+                    edit_message(
+                        chat_id, target_id,
+                        progress_message(run, "ksu-next", False, 0),
+                        progress_keyboard(run),
+                    )
+                    track_build(chat_id, target_id, run, "ksu-next", False)
+                else:
+                    msg = send_fresh(
+                        chat_id,
+                        progress_message(run, "ksu-next", False, 0),
+                        progress_keyboard(run),
+                    )
+                    track_build(chat_id, msg["message_id"], run, "ksu-next", False)
             elif target_id:
                 edit_message(
                     chat_id, target_id,
-                    progress_message(run, "ksu-next", False, 0),
-                    progress_keyboard(run),
+                    "🟢 <b>No build is currently running.</b>",
+                    menu_keyboard(),
                 )
-                track_build(chat_id, target_id, run, "ksu-next", False)
             else:
-                msg = send_fresh(
-                    chat_id,
-                    progress_message(run, "ksu-next", False, 0),
-                    progress_keyboard(run),
-                )
-                track_build(chat_id, msg["message_id"], run, "ksu-next", False)
-        elif target_id:
-            edit_message(
-                chat_id, target_id,
-                "🟢 <b>No build is currently running.</b>",
-                menu_keyboard(),
-            )
-        else:
-            send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
-
+                send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
 
 def handle_callback(query):
     query_id = query.get("id")
@@ -557,27 +565,34 @@ def handle_callback(query):
             return
 
         if data == "status":
-            run = active_run()
-            if run:
-                tracked = TRACKED_RUNS.get(chat_id)
-                if tracked and tracked["run_id"] == run["id"]:
-                    text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
-                    tracked["frame"] += 1
-                    edit_message(chat_id, message_id, text, progress_keyboard(run))
-                    tracked["last_text"] = text
-                else:
+            tracked = TRACKED_RUNS.get(chat_id)
+            run = None
+            if tracked:
+                try:
+                    run = get_run(tracked["run_id"])
+                except Exception as exc:
+                    print(f"tracked refresh lookup failed: {exc}", file=sys.stderr)
+
+            if run and run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
+                text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+                tracked["frame"] += 1
+                edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
+                tracked["last_text"] = text
+            else:
+                run = active_run()
+                if run:
                     edit_message(
                         chat_id, message_id,
                         progress_message(run, "ksu-next", False, 0),
                         progress_keyboard(run),
                     )
                     track_build(chat_id, message_id, run, "ksu-next", False)
-            else:
-                edit_message(
-                    chat_id, message_id,
-                    "🟢 <b>No build is currently running.</b>",
-                    menu_keyboard(),
-                )
+                else:
+                    edit_message(
+                        chat_id, message_id,
+                        "🟢 <b>No build is currently running.</b>",
+                        menu_keyboard(),
+                    )
             return
 
         if data.startswith("cancelrun:"):
