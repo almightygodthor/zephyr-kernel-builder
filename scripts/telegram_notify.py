@@ -60,6 +60,7 @@ def main() -> int:
         keyboard = [
             [{"text": "🚀 Publish GitHub Release", "callback_data": f"publish:{run_id}:{run_number}"}],
             [{"text": "🧪 Actions Run / Download", "url": actions_url}],
+            [{"text": "🗑️ Delete Build", "callback_data": f"deletebuild:{run_id}"}],
         ]
     elif state == "published":
         release_url = os.environ.get("RELEASE_URL", "")
