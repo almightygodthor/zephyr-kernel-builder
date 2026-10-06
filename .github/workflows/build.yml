@@ -191,26 +191,6 @@ jobs:
           **SHA256:** `$ZIP_SHA256`
           EOF
 
-      - name: Create GitHub Release
-        if: ${{ success() && inputs.build_ak3 != false }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        working-directory: release
-        run: |
-          ZIP="../artifacts/$(cat ZIP_NAME)"
-          TAG_VALUE="$(cat TAG)"
-          ZIP_NAME_VALUE="$(cat ZIP_NAME)"
-          gh release create "$TAG_VALUE" "$ZIP" \
-            --title "$(cat TITLE)" \
-            --notes-file RELEASE.md
-
-          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_VALUE}"
-          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_VALUE}/${ZIP_NAME_VALUE}"
-          echo "RELEASE_URL=$RELEASE_URL" >> "$GITHUB_ENV"
-          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> "$GITHUB_ENV"
-          echo "ARTIFACT_NAME=$ZIP_NAME_VALUE" >> "$GITHUB_ENV"
-          echo "ARTIFACT_SIZE=$(cat ZIP_SIZE)" >> "$GITHUB_ENV"
-          echo "ARTIFACT_SHA256=$(cat ZIP_SHA256)" >> "$GITHUB_ENV"
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
@@ -221,6 +201,12 @@ jobs:
             artifacts/Image.gz
             artifacts/BUILD_NAME
             artifacts/BUILD_TIME_UTC
+            release/TAG
+            release/TITLE
+            release/ZIP_NAME
+            release/ZIP_SHA256
+            release/ZIP_SIZE
+            release/RELEASE.md
           if-no-files-found: error
           retention-days: 14
 
@@ -235,9 +221,4 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           ROOT_IMPL: ${{ inputs.root }}
           SUSFS_ENABLED: ${{ inputs.susfs }}
-          RELEASE_URL: ${{ env.RELEASE_URL }}
-          DOWNLOAD_URL: ${{ env.DOWNLOAD_URL }}
-          ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}
-          ARTIFACT_SIZE: ${{ env.ARTIFACT_SIZE }}
-          ARTIFACT_SHA256: ${{ env.ARTIFACT_SHA256 }}
         run: python3 scripts/telegram_notify.py "${JOB_STATUS}"
