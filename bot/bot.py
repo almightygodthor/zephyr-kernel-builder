@@ -453,24 +453,24 @@ def handle_callback(query):
 
     try:
         if data == "build":
-            send_fresh(
-                chat_id,
+            edit_message(
+                chat_id, message_id,
                 "<b>🌳 SELECT ROOT</b>\n\nChoose the root implementation:",
                 root_keyboard(),
             )
             return
 
         if data == "root:ksu-next":
-            send_fresh(
-                chat_id,
+            edit_message(
+                chat_id, message_id,
                 "<b>ඞ SELECT SUSFS</b>\n\nKernelSU-Next selected.",
                 susfs_keyboard("ksu-next"),
             )
             return
 
         if data == "root:none":
-            send_fresh(
-                chat_id,
+            edit_message(
+                chat_id, message_id,
                 build_text("none", False),
                 confirm_keyboard("none", False),
             )
@@ -499,16 +499,16 @@ def handle_callback(query):
 
             run, existing = dispatch_build(root, susfs)
             if existing:
-                send_fresh(
-                    chat_id,
+                edit_message(
+                    chat_id, message_id,
                     f"⚠️ <b>Build already running</b> · #{esc(existing.get('run_number', '?'))}",
                     status_keyboard(existing),
                 )
                 return
 
             if not run:
-                send_fresh(
-                    chat_id,
+                edit_message(
+                    chat_id, message_id,
                     "⚠️ <b>Build dispatched</b>\nGitHub has not created the run yet.",
                     menu_keyboard(),
                 )
@@ -518,8 +518,8 @@ def handle_callback(query):
             if run.get("html_url"):
                 rows.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
 
-            msg = send_fresh(
-                chat_id,
+            edit_message(
+                chat_id, message_id,
                 (
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
@@ -529,7 +529,7 @@ def handle_callback(query):
                 ),
                 rows,
             )
-            track_build(chat_id, msg["message_id"], run, root, susfs)
+            track_build(chat_id, message_id, run, root, susfs)
             return
 
         if data == "status":
@@ -561,7 +561,7 @@ def handle_callback(query):
 
     except Exception as exc:
         print(f"callback {data!r} failed: {exc}", file=sys.stderr)
-        send_fresh(chat_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard())
+        edit_message(chat_id, message_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard())
 
 
 def schedule_next_worker():
