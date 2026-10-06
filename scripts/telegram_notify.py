@@ -62,6 +62,21 @@ def main() -> int:
             [{"text": "🚀 Publish GitHub Release", "callback_data": f"publish:{run_id}:{run_number}"}],
             [{"text": "🧪 Actions Run / Download", "url": actions_url}],
         ]
+    elif state == "published":
+        release_url = os.environ.get("RELEASE_URL", "")
+        download_url = os.environ.get("DOWNLOAD_URL", "")
+        body = (
+            "<b>🚀 ZEPHYR · RELEASE PUBLISHED</b>\n\n"
+            "📱 GT Neo 3 · zephyr\n"
+            "🧩 Linux 5.10 · MT6895\n"
+            f"🆔 Run <code>#{html.escape(run_number)}</code>"
+        )
+        keyboard = []
+        if download_url:
+            keyboard.append([{"text": "⬇️ Download Kernel ZIP", "url": download_url}])
+        if release_url:
+            keyboard.append([{"text": "📦 GitHub Release ↗", "url": release_url}])
+        keyboard.append([{"text": "🌱 KSU-Next ↗", "url": "https://github.com/KernelSU-Next/KernelSU-Next/releases"}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
     elif state == "started":
         # The Telegram worker already owns the single live build card.
         # Avoid creating a second BUILD STARTED message from the Actions workflow.
