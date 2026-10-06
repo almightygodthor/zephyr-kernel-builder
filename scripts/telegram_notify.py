@@ -88,7 +88,10 @@ def main() -> int:
             f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
-        keyboard = [[{"text": "🔗 GitHub Actions ↗", "url": actions_url}]]
+        keyboard = [
+            [{"text": "🔗 GitHub Actions ↗", "url": actions_url}],
+            [{"text": "🗑️ Delete Build", "callback_data": f"deletebuild:{run_id}"}],
+        ]
     send(body, keyboard)
     return 0
 
