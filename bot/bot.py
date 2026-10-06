@@ -24,6 +24,7 @@ POLL_TIMEOUT = 20
 MONITOR_INTERVAL = 15
 PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
+LAST_BOT_MESSAGES = {}
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
@@ -94,7 +95,9 @@ def send(chat_id, text, keyboard=None, message_id=None):
     if message_id is not None:
         payload["message_id"] = message_id
         try:
-            return tg("editMessageText", payload)
+            result = tg("editMessageText", payload)
+            LAST_BOT_MESSAGES[chat_id] = message_id
+            return result
         except APIError as exc:
             print(f"message edit failed, sending fresh message: {exc}", file=sys.stderr)
 
@@ -103,7 +106,10 @@ def send(chat_id, text, keyboard=None, message_id=None):
 
 
 def send_fresh(chat_id, text, keyboard=None):
-    return send(chat_id, text, keyboard)
+    result = send(chat_id, text, keyboard)
+    if isinstance(result, dict) and result.get("message_id"):
+        LAST_BOT_MESSAGES[chat_id] = result["message_id"]
+    return result
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
