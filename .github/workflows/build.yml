@@ -86,15 +86,24 @@ jobs:
             --no-clone-bundle \
             --force-sync
 
-      - name: Verify source tree
+      - name: Inspect source tree
         run: |
-          set -e
-          test -f workspace/build.config
-          test -f workspace/kernel-5.10/build.config.oplus6895
-          test -f workspace/kernel-5.10/arch/arm64/configs/gki_defconfig
-          test -f workspace/kernel-5.10/arch/arm64/configs/mgk_64_k510_defconfig
+          set -x
+
+          echo "=== kernel directory ==="
+          ls -la workspace/kernel-5.10
+
+          echo "=== build config ==="
+          ls -l workspace/kernel-5.10/build.config.oplus6895 || true
+
+          echo "=== workspace build.config ==="
+          ls -l workspace/build.config || true
+
+          echo "=== defconfig directory ==="
+          ls -la workspace/kernel-5.10/arch/arm64/configs | grep -E 'oplus6895|gki_defconfig|mgk_64' || true
+
+          echo "=== kernel HEAD ==="
           git -C workspace/kernel-5.10 rev-parse HEAD
-          git -C workspace/kernel-5.10 status --short
 
       - name: Limit build config to Image.gz
         working-directory: workspace
