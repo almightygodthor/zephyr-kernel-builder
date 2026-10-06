@@ -17,7 +17,7 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builde
 BUILD_WORKFLOW = "376656950"
 BOT_WORKFLOW = "telegram-bot.yml"
 RELEASE_WORKFLOW = "publish-release.yml"
-BRANCH = os.environ.get("GITHUB_REF", "main")
+BRANCH = os.environ.get("GITHUB_REF_NAME") or os.environ.get("GITHUB_REF", "main").removeprefix("refs/heads/")
 DELETE_OWNER_ID = 7577854738
 
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
