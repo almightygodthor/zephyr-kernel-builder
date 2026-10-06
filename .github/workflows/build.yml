@@ -135,7 +135,7 @@ jobs:
         run: |
           export ROOT_DIR="$PWD"
           export OUT_DIR="$ROOT_DIR/out"
-          export BUILD_CONFIG="$ROOT_DIR/build.config"
+          export BUILD_CONFIG="build.config"
           ulimit -n 65535
           bash build/build.sh
 
