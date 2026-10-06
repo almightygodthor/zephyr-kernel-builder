@@ -226,9 +226,19 @@ jobs:
         working-directory: release
         run: |
           ZIP="../artifacts/$(cat ZIP_NAME)"
-          gh release create "$(cat TAG)" "$ZIP" "../artifacts/Image.gz" \
+          TAG_VALUE="$(cat TAG)"
+          ZIP_NAME_VALUE="$(cat ZIP_NAME)"
+          gh release create "$TAG_VALUE" "$ZIP" "../artifacts/Image.gz" \
             --title "$(cat TITLE)" \
             --notes-file RELEASE.md
+
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG_VALUE}"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_VALUE}/${ZIP_NAME_VALUE}"
+          echo "RELEASE_URL=$RELEASE_URL" >> "$GITHUB_ENV"
+          echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=$ZIP_NAME_VALUE" >> "$GITHUB_ENV"
+          echo "ARTIFACT_SIZE=$(cat ZIP_SIZE)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_SHA256=$(cat ZIP_SHA256)" >> "$GITHUB_ENV"
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
