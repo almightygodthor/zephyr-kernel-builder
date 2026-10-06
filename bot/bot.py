@@ -158,7 +158,7 @@ def root_keyboard():
 
 def susfs_keyboard(root):
     return [
-        [{"text": "🛡 Enable SUSFS", "callback_data": f"susfs:{root}:on"}],
+        [{"text": "ඞ Enable SUSFS", "callback_data": f"susfs:{root}:on"}],
         [{"text": "⚪ Disable SUSFS", "callback_data": f"susfs:{root}:off"}],
         [{"text": "◀️ Back", "callback_data": "build"}],
     ]
@@ -179,7 +179,7 @@ def build_text(root, susfs):
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
         f"🌳 Root · <code>{root_label}</code>\n"
-        f"🛡 SUSFS · <code>{susfs_label}</code>\n"
+        f"ඞ SUSFS · <code>{susfs_label}</code>\n"
         "📦 AnyKernel3 · <code>Enabled</code>\n\n"
         "Ready to build?"
     )
@@ -333,7 +333,7 @@ def progress_message(run, root, susfs, frame):
         f"<b>⚡ ZEPHYR · BUILDING {spin}</b>\n\n"
         "📱 GT Neo 3 · zephyr\n"
         "🧩 Linux 5.10 · MT6895\n"
-        f"🌳 {root_label} · 🛡 {susfs_label} · 📦 AK3\n\n"
+        f"🌳 {root_label} · ඞ {susfs_label} · 📦 AK3\n\n"
         f"{spin} <b>{esc(stage)}</b>\n"
         f"<code>[{bar}] {pct}%</code>\n"
         f"⏱ {elapsed_text(run)} · 🆔 #{esc(run.get('run_number', '?'))}"
@@ -440,7 +440,7 @@ def handle_callback(query):
         if data == "root:ksu-next":
             send_fresh(
                 chat_id,
-                "<b>🛡 SELECT SUSFS</b>\n\nKernelSU-Next selected.",
+                "<b>ඞ SELECT SUSFS</b>\n\nKernelSU-Next selected.",
                 susfs_keyboard("ksu-next"),
             )
             return
@@ -501,7 +501,7 @@ def handle_callback(query):
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
                     f"🌳 {'KSU-Next' if root == 'ksu-next' else 'No Root'} · "
-                    f"🛡 {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
+                    f"ඞ {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
                     f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
                 rows,
