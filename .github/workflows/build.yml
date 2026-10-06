@@ -88,17 +88,19 @@ jobs:
 
       - name: Verify source tree
         run: |
+          test -f workspace/build.config
           test -f workspace/kernel-5.10/build.config.oplus6895
-          test -f workspace/kernel-5.10/arch/arm64/configs/oplus6895_defconfig
+          test -f workspace/kernel-5.10/arch/arm64/configs/gki_defconfig
+          test -f workspace/kernel-5.10/arch/arm64/configs/mgk_64_k510_defconfig
           git -C workspace/kernel-5.10 rev-parse HEAD
           git -C workspace/kernel-5.10 status --short
 
       - name: Limit build config to Image.gz
-        working-directory: workspace/kernel-5.10
+        working-directory: workspace
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("build.config.oplus6895")
+          p = Path("build.config")
           s = p.read_text()
           start = s.find('MAKE_GOALS="')
           if start < 0:
@@ -123,7 +125,7 @@ jobs:
         run: |
           export ROOT_DIR="$PWD"
           export OUT_DIR="$ROOT_DIR/out"
-          export BUILD_CONFIG="$ROOT_DIR/kernel-5.10/build.config.oplus6895"
+          export BUILD_CONFIG="$ROOT_DIR/build.config"
           ulimit -n 65535
           bash build/build.sh
 
