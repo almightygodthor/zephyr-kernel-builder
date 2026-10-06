@@ -118,7 +118,7 @@ jobs:
           end = s.find('\n"', start)
           if end < 0:
               raise SystemExit("MAKE_GOALS block terminator not found")
-          new = 'MAKE_GOALS="\nImage.gz\n"\n          # This workflow only produces Image.gz; do not run modules_install.\n          new += '\nIN_KERNEL_MODULES=""\nEXT_MODULES=""\nBUILD_INITRAMFS=""\n'
+          new = 'MAKE_GOALS="\nImage.gz\n"\nIN_KERNEL_MODULES=""\nEXT_MODULES=""\nBUILD_INITRAMFS=""\n'
           p.write_text(s[:start] + new + s[end+2:])
           print(p.read_text().split('MAKE_GOALS="', 1)[1].split('"', 1)[0])
           PY
