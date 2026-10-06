@@ -5,8 +5,6 @@
        different attributes. Use a separate remote for Oplus sources. -->
   <remote name="oplus" fetch="https://github.com/oplus-mt6895" />
 
-  <superproject name="kernel/superproject" remote="aosp" revision="common-android12-5.10" />
-
   <project path="kernel-5.10" name="android_kernel_oplus_mt6895" remote="oplus" revision="lineage-24.0">
     <linkfile dest="build.config" src="build.config.oplus6895" />
   </project>
