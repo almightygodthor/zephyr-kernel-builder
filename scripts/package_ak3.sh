@@ -3,6 +3,8 @@ set -euo pipefail
 
 KERNEL_DIR="${1:?kernel source directory required}"
 OUT_DIR="${2:?build output directory required}"
+ROOT_IMPL="${3:-ksu-next}"
+SUSFS_ENABLED="${4:-true}"
 
 # build/build.sh uses O="$OUT_DIR/kernel-5.10", so the generated image lives there.
 IMAGE="$OUT_DIR/kernel-5.10/arch/arm64/boot/Image.gz"
@@ -12,7 +14,11 @@ IMAGE="$OUT_DIR/kernel-5.10/arch/arm64/boot/Image.gz"
 
 mkdir -p artifacts
 TS="$(date -u +%Y%m%d-%H%M)"
-NAME="Zephyr-KSU-Next-SUSFS-${TS}"
+ROOT_LABEL="NoRoot"
+[ "$ROOT_IMPL" = "ksu-next" ] && ROOT_LABEL="KSU-Next"
+SUSFS_LABEL="NoSUSFS"
+[ "$SUSFS_ENABLED" = "true" ] && SUSFS_LABEL="SUSFS"
+NAME="Zephyr-${ROOT_LABEL}-${SUSFS_LABEL}-${TS}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
