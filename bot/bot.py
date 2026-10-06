@@ -316,8 +316,10 @@ def status_keyboard(run):
     if run.get("html_url"):
         buttons.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
     buttons.append([{"text": "🔄 Refresh", "callback_data": "status"}])
-    if run.get("id"):
+    if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"} and run.get("id"):
         buttons.append([{"text": "🛑 Cancel Build", "callback_data": f"cancelrun:{run['id']}"}])
+    elif run.get("id") and run.get("conclusion"):
+        buttons.append([{"text": "🗑️ Delete Build", "callback_data": f"deletebuild:{run['id']}"}])
     return buttons
 
 
@@ -716,6 +718,34 @@ def handle_callback(query):
                 [
                     [{"text": "🧪 Actions Run / Download", "url": f"https://github.com/{REPO}/actions/runs/{run_id}"}],
                     [{"text": "🚀 Publish Later", "callback_data": f"publish:{run_id}:{run_number}"}],
+                ],
+            )
+            return
+
+        if data.startswith("deleteconfirm:"):
+            run_id = data.split(":", 1)[1]
+            gh("DELETE", f"/repos/{REPO}/actions/runs/{run_id}")
+            TRACKED_RUNS.pop(chat_id, None)
+            edit_message(
+                chat_id, message_id,
+                "🗑️ <b>BUILD DELETED</b>\n\n"
+                "The GitHub Actions run and its Actions artifacts have been removed.",
+                menu_keyboard(),
+            )
+            return
+
+        if data.startswith("deletebuild:"):
+            run_id = data.split(":", 1)[1]
+            run = get_run(run_id)
+            run_number = run.get("run_number", "?")
+            edit_message(
+                chat_id, message_id,
+                "⚠️ <b>DELETE BUILD?</b>\n\n"
+                f"Run <code>#{esc(run_number)}</code> and its Actions artifacts will be permanently deleted.\n\n"
+                "This does <b>not</b> delete a GitHub Release if you already published one.",
+                [
+                    [{"text": "🗑️ YES, DELETE", "callback_data": f"deleteconfirm:{run_id}"}],
+                    [{"text": "↩️ Keep Build", "callback_data": "status"}],
                 ],
             )
             return
