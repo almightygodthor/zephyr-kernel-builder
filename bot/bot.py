@@ -21,6 +21,7 @@ GH_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
 WORKFLOW = "376656950"
 BRANCH = os.environ.get("GITHUB_REF", "main")
+PENDING_CONFIGS = {}
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 GH_API = "https://api.github.com"
@@ -191,7 +192,7 @@ def build_text(root, susfs):
 def active_run():
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/runs?event=workflow_dispatch&branch={urllib.parse.quote(BRANCH, safe='')}&per_page=20",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=20",
     )
     for run in data.get("workflow_runs", []):
         if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
@@ -204,7 +205,7 @@ def dispatch_build(root, susfs):
     if active:
         return None, active
 
-    gh(
+    result = gh(
         "POST",
         f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/dispatches",
         {
@@ -214,12 +215,18 @@ def dispatch_build(root, susfs):
                 "susfs": "true" if susfs else "false",
                 "build_ak3": "true",
             },
+            "return_run_details": True,
         },
     )
 
+    run_id = result.get("workflow_run_id")
+    if run_id:
+        run = gh("GET", f"/repos/{REPO}/actions/runs/{run_id}")
+        return run, None
+
     data = gh(
         "GET",
-        f"/repos/{REPO}/actions/runs?event=workflow_dispatch&branch={urllib.parse.quote(BRANCH, safe='')}&per_page=10",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(WORKFLOW, safe='')}/runs?branch={urllib.parse.quote(BRANCH, safe='')}&per_page=10",
     )
     runs = data.get("workflow_runs", [])
     return (runs[0] if runs else None), None
@@ -334,6 +341,7 @@ def handle_callback(query):
             if root != "ksu-next" or state not in {"on", "off"}:
                 raise APIError("invalid SUSFS selection")
             susfs = state == "on"
+            PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
             send(
                 chat_id,
                 build_text(root, susfs),
@@ -346,7 +354,13 @@ def handle_callback(query):
             _, root, state = data.split(":", 2)
             if root not in {"ksu-next", "none"} or state not in {"on", "off"}:
                 raise APIError("invalid build selection")
-            susfs = root == "ksu-next" and state == "on"
+            pending = PENDING_CONFIGS.pop(chat_id, None)
+            if pending:
+                root = pending["root"]
+                susfs = pending["susfs"]
+            else:
+                susfs = root == "ksu-next" and state == "on"
+            print(f"Dispatching build: root={root}, susfs={susfs}", flush=True)
             run, existing = dispatch_build(root, susfs)
             if existing:
                 send(
