@@ -184,39 +184,11 @@ jobs:
           cat > ../release/RELEASE.md <<EOF
           ## ⚡ Zephyr Kernel — Realme GT Neo 3
 
-          **Device:** Realme GT Neo 3 (`zephyr`)  
-          **SoC:** MediaTek MT6895  
-          **Kernel:** Linux 5.10  
-          **Kernel branch:** `lineage-24.0`
+          GT Neo 3 (zephyr) · MT6895 · Linux 5.10
 
-          ### 🔧 Configuration
+          **Root:** `${ROOT_IMPL}` · **SUSFS:** `$SUSFS_ENABLED` · **AK3:** Enabled
 
-          - **Root:** `${ROOT_IMPL}`
-          - **SUSFS:** `$SUSFS_ENABLED`
-          - **AnyKernel3:** `almightygodthor/AnyKernel3`
-          - **Build:** GitHub Actions #${GITHUB_RUN_NUMBER}
-
-          ### 📦 Kernel ZIP
-
-          **File:** `$(basename "$ZIP")`  
-          **Size:** `$ZIP_SIZE`  
           **SHA256:** `$ZIP_SHA256`
-
-          ### 🧩 Image.gz
-
-          **SHA256:** `$IMAGE_SHA256`
-
-          ### 🌳 KernelSU-Next
-
-          **Integration ref:** `$KSU_REF`  
-          **Commit:** `$KSU_COMMIT`  
-          **Manager:** https://github.com/KernelSU-Next/KernelSU-Next/releases
-
-          ### 🛡 SUSFS
-
-          **Integration ref:** `$SUSFS_REF`  
-          **Commit:** `$SUSFS_COMMIT`  
-          **Module:** https://github.com/sidex15/susfs4ksu-module/releases
           EOF
 
       - name: Create GitHub Release
@@ -228,7 +200,7 @@ jobs:
           ZIP="../artifacts/$(cat ZIP_NAME)"
           TAG_VALUE="$(cat TAG)"
           ZIP_NAME_VALUE="$(cat ZIP_NAME)"
-          gh release create "$TAG_VALUE" "$ZIP" "../artifacts/Image.gz" \
+          gh release create "$TAG_VALUE" "$ZIP" \
             --title "$(cat TITLE)" \
             --notes-file RELEASE.md
 
