@@ -1,0 +1,126 @@
+name: Zephyr Kernel Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      root:
+        description: Root implementation
+        required: true
+        default: ksu-next
+        type: choice
+        options:
+          - ksu-next
+      susfs:
+        description: Enable SUSFS
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: zephyr-kernel-build
+  cancel-in-progress: false
+
+env:
+  MANIFEST_REPO: https://github.com/almightygodthor/zephyr-kernel-builder.git
+  KERNEL_REPO: https://github.com/oplus-mt6895/android_kernel_oplus_mt6895.git
+  KERNEL_BRANCH: lineage-24.0
+  MODULES_REPO: https://github.com/oplus-mt6895/android_kernel_modules_oplus_mt6895.git
+  MODULES_BRANCH: lineage-23.2
+  KERNEL_DIR: kernel-5.10
+  DEFCONFIG: oplus6895_defconfig
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Notify build started
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: python3 scripts/telegram_notify.py started
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl ca-certificates python3 python3-pip repo rsync ccache bc bison flex build-essential libssl-dev libelf-dev pahole zip unzip
+
+      - name: Sync Android kernel build manifest
+        run: |
+          mkdir -p workspace
+          cd workspace
+          repo init -u https://android.googlesource.com/kernel/manifest -b master-kernel-build-2021 --depth=1
+          cp ../manifests/zephyr.xml .repo/local_manifests/zephyr.xml
+          repo sync -c -j\$(nproc)
+
+      - name: Verify source tree
+        run: |
+          test -f workspace/kernel-5.10/build.config.oplus6895
+          test -f workspace/kernel-5.10/arch/arm64/configs/oplus6895_defconfig
+          git -C workspace/kernel-5.10 status --short
+          git -C workspace/kernel-5.10 rev-parse HEAD
+
+      - name: Integrate KernelSU-Next and SUSFS
+        env:
+          SUSFS_ENABLED: ${{ inputs.susfs || 'true' }}
+        run: |
+          chmod +x scripts/integrate_ksu_susfs.sh
+          scripts/integrate_ksu_susfs.sh workspace/kernel-5.10 "${SUSFS_ENABLED}"
+
+      - name: Build Image.gz
+        working-directory: workspace
+        env:
+          KERNEL_DIR: kernel-5.10
+        run: |
+          export ROOT_DIR="$PWD"
+          export OUT_DIR="$ROOT_DIR/out"
+          export BUILD_CONFIG="$ROOT_DIR/kernel-5.10/build.config.oplus6895"
+          ulimit -n 65535
+          bash kernel-5.10/build/build.sh
+
+      - name: Package AnyKernel3
+        run: |
+          chmod +x scripts/package_ak3.sh
+          scripts/package_ak3.sh workspace/kernel-5.10 workspace/out
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zephyr-kernel-${{ github.run_number }}
+          path: |
+            artifacts/*.zip
+            artifacts/Image.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Notify build success
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: python3 scripts/telegram_notify.py success
+
+      - name: Notify build failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: python3 scripts/telegram_notify.py failure
