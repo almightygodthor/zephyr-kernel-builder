@@ -462,6 +462,21 @@ def main():
         # Advancing offset confirms the batch even if one update failed.
         offset = max(update["update_id"] for update in updates) + 1
 
+    # Confirm the final batch before the runner exits. Without this, a final
+    # update arriving near shutdown could be processed again next run.
+    try:
+        tg(
+            "getUpdates",
+            {
+                "offset": offset,
+                "timeout": 0,
+                "allowed_updates": ["message", "callback_query"],
+            },
+            timeout=5,
+        )
+    except Exception as exc:
+        print(f"final Telegram confirmation failed: {exc}", file=sys.stderr)
+
     print("Telegram polling window finished.", flush=True)
     return 0
 
