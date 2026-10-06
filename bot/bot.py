@@ -21,14 +21,14 @@ BRANCH = os.environ.get("GITHUB_REF_NAME") or os.environ.get("GITHUB_REF", "main
 DELETE_OWNER_ID = 7577854738
 
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
-WORKER_SECONDS = 340 * 60
+WORKER_SECONDS = 60 * 60
 POLL_TIMEOUT = 2
-MONITOR_INTERVAL = 1
+MONITOR_INTERVAL = 0.5
 GH_PROGRESS_INTERVAL = 1
 PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
 LAST_BOT_MESSAGES = {}
-SPINNER = ["⠋", "⠙", "⠸", "⠴"]
+SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 GH_API = "https://api.github.com"
