@@ -24,11 +24,11 @@ DELETE_OWNER_ID = 7577854738
 WORKER_SECONDS = 340 * 60
 POLL_TIMEOUT = 2
 MONITOR_INTERVAL = 1
-GH_PROGRESS_INTERVAL = 2
+GH_PROGRESS_INTERVAL = 1
 PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
 LAST_BOT_MESSAGES = {}
-SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+SPINNER = ["⠋", "⠙", "⠸", "⠴"]
 
 TG_API = f"https://api.telegram.org/bot{TG_TOKEN}"
 GH_API = "https://api.github.com"
