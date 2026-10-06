@@ -49,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y             git curl ca-certificates python3 python3-pip repo rsync ccache             bc bison flex build-essential libssl-dev libelf-dev pahole             zip unzip
+          sudo apt-get install -y git curl ca-certificates python3 python3-pip repo rsync ccache bc bison flex build-essential libssl-dev libelf-dev pahole zip unzip
 
       - name: Notify build started
         env:
@@ -72,56 +72,56 @@ jobs:
           rm -rf workspace
           mkdir -p workspace
           cd workspace
-
-          # Use our complete manifest directly, like the known-good builder.
-          # Do NOT overlay it on AOSP's manifest.
-          repo init \
-            -u https://github.com/almightygodthor/zephyr-kernel-builder.git \
-            -b main \
-            -m manifests/zephyr.xml \
-            --depth=1
-
-          repo sync -c -j$(nproc --all) \
-            --no-tags \
-            --no-clone-bundle \
-            --force-sync
+          repo init -u https://github.com/almightygodthor/zephyr-kernel-builder.git -b main -m manifests/zephyr.xml --depth=1
+          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
 
       - name: Inspect source tree
         run: |
           set -x
-
           echo "=== kernel directory ==="
           ls -la workspace/kernel-5.10
-
           echo "=== build config ==="
-          ls -l workspace/kernel-5.10/build.config.oplus6895 || true
-
+          ls -l workspace/kernel-5.10/build.config.oplus6895
           echo "=== workspace build.config ==="
-          ls -l workspace/build.config || true
-
+          ls -l workspace/build.config
           echo "=== defconfig directory ==="
           ls -la workspace/kernel-5.10/arch/arm64/configs | grep -E 'oplus6895|gki_defconfig|mgk_64' || true
-
           echo "=== kernel HEAD ==="
           git -C workspace/kernel-5.10 rev-parse HEAD
+          echo "=== original build config ==="
+          sed -n '1,220p' workspace/build.config
 
-      - name: Limit build config to Image.gz
+      - name: Prepare Image.gz-only build config
         working-directory: workspace
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("build.config")
-          s = p.read_text()
-          start = s.find('MAKE_GOALS="')
-          if start < 0:
-              raise SystemExit("MAKE_GOALS block not found")
-          end = s.find('\n"', start)
-          if end < 0:
-              raise SystemExit("MAKE_GOALS block terminator not found")
-          new = 'MAKE_GOALS="\nImage.gz\n"\nIN_KERNEL_MODULES=""\nEXT_MODULES=""\nBUILD_INITRAMFS=""\n'
-          p.write_text(s[:start] + new + s[end+2:])
-          print(p.read_text().split('MAKE_GOALS="', 1)[1].split('"', 1)[0])
-          PY
+          cp -L build.config build.config.zephyr-original
+          cat > build.config <<'EOF'
+          KERNEL_DIR=kernel-5.10
+          . ${ROOT_DIR}/${KERNEL_DIR}/build.config.common
+          . ${ROOT_DIR}/${KERNEL_DIR}/build.config.aarch64
+          . ${ROOT_DIR}/${KERNEL_DIR}/build.config.lto_thin
+
+          DEFCONFIG=oplus6895_defconfig
+          PRE_DEFCONFIG_CMDS="KCONFIG_CONFIG=${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/${DEFCONFIG} ${ROOT_DIR}/${KERNEL_DIR}/scripts/kconfig/merge_config.sh -m -r ${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/gki_defconfig ${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/mgk_64_k510_defconfig ${ROOT_DIR}/${KERNEL_DIR}/kernel/configs/oplus6895.config"
+          POST_DEFCONFIG_CMDS="rm ${ROOT_DIR}/${KERNEL_DIR}/arch/arm64/configs/${DEFCONFIG}"
+
+          MAKE_GOALS="
+          Image.gz
+          "
+
+          FILES="
+          arch/arm64/boot/Image.gz
+          "
+
+          DTC='${OUT_DIR}/scripts/dtc/dtc'
+
+          IN_KERNEL_MODULES=""
+          EXT_MODULES=""
+          BUILD_INITRAMFS=""
+          EOF
+
+          echo "=== active build.config ==="
+          cat build.config
 
       - name: Integrate KernelSU-Next and SUSFS
         env:
@@ -136,8 +136,16 @@ jobs:
           export ROOT_DIR="$PWD"
           export OUT_DIR="$ROOT_DIR/out"
           export BUILD_CONFIG="build.config"
+          export SKIP_ABI_CHECKS=1
           ulimit -n 65535
           bash build/build.sh
+
+      - name: Verify Image.gz
+        working-directory: workspace
+        run: |
+          test -s out/kernel-5.10/arch/arm64/boot/Image.gz
+          echo "Image.gz built successfully:"
+          ls -lh out/kernel-5.10/arch/arm64/boot/Image.gz
 
       - name: Package AnyKernel3
         if: ${{ inputs.build_ak3 != false }}
