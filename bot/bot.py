@@ -542,10 +542,18 @@ def handle_callback(query):
                     edit_message(chat_id, message_id, text, progress_keyboard(run))
                     tracked["last_text"] = text
                 else:
-                    msg = send_fresh(chat_id, progress_message(run, "ksu-next", False, 0), progress_keyboard(run))
-                    track_build(chat_id, msg["message_id"], run, "ksu-next", False)
+                    edit_message(
+                        chat_id, message_id,
+                        progress_message(run, "ksu-next", False, 0),
+                        progress_keyboard(run),
+                    )
+                    track_build(chat_id, message_id, run, "ksu-next", False)
             else:
-                send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
+                edit_message(
+                    chat_id, message_id,
+                    "🟢 <b>No build is currently running.</b>",
+                    menu_keyboard(),
+                )
             return
 
         if data.startswith("cancelrun:"):
