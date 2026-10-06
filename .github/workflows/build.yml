@@ -61,14 +61,30 @@ jobs:
           JOB_STATUS: started
         run: python3 scripts/telegram_notify.py started
 
+      - name: Install repo tool
+        run: |
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o /tmp/repo
+          chmod +x /tmp/repo
+          sudo mv /tmp/repo /usr/local/bin/repo
+
       - name: Sync Android kernel build manifest
         run: |
+          rm -rf workspace
           mkdir -p workspace
           cd workspace
-          repo init -u https://android.googlesource.com/kernel/manifest             -b common-android12-5.10 --depth=1
-          mkdir -p .repo/local_manifests
-          cp ../manifests/zephyr.xml .repo/local_manifests/zephyr.xml
-          repo sync -c -j$(nproc)
+
+          # Use our complete manifest directly, like the known-good builder.
+          # Do NOT overlay it on AOSP's manifest.
+          repo init \
+            -u https://github.com/almightygodthor/zephyr-kernel-builder.git \
+            -b main \
+            -m manifests/zephyr.xml \
+            --depth=1
+
+          repo sync -c -j$(nproc --all) \
+            --no-tags \
+            --no-clone-bundle \
+            --force-sync
 
       - name: Verify source tree
         run: |
