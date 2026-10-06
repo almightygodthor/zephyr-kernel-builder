@@ -79,8 +79,8 @@ jobs:
           echo "RELEASE_URL=$RELEASE_URL" >> "$GITHUB_ENV"
           echo "DOWNLOAD_URL=$DOWNLOAD_URL" >> "$GITHUB_ENV"
 
-      - name: Notify Telegram
-        if: always()
+      - name: Notify Telegram — published
+        if: success()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -91,3 +91,14 @@ jobs:
           DOWNLOAD_URL: ${{ env.DOWNLOAD_URL }}
         run: |
           python3 scripts/telegram_notify.py published
+
+      - name: Notify Telegram — publish failed
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id }}
+          RUN_NUMBER: ${{ inputs.run_number }}
+        run: |
+          python3 scripts/telegram_notify.py failure
