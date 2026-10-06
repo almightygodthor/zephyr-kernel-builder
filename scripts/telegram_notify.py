@@ -78,13 +78,9 @@ def main() -> int:
             {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"},
         ])
     elif state == "started":
-        body = (
-            "<b>🚀 ZEPHYR · BUILD STARTED</b>\n"
-            f"📱 GT Neo 3 · zephyr · MT6895\n"
-            f"🌳 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
-            f"🆔 Run <code>#{html.escape(run_number)}</code>"
-        )
-        keyboard = [[{"text": "🔄 Live Progress", "callback_data": "status"}], [{"text": "🔗 GitHub Actions ↗", "url": actions_url}]]
+        # The Telegram worker already owns the single live build card.
+        # Avoid creating a second BUILD STARTED message from the Actions workflow.
+        return 0
     else:
         body = (
             f"<b>{icon} ZEPHYR · BUILD {html.escape(state.upper())}</b>\n\n"
