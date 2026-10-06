@@ -40,7 +40,6 @@ def main() -> int:
     state = sys.argv[1] if len(sys.argv) > 1 else "unknown"
     run_id = os.environ.get("RUN_ID", "-")
     run_number = os.environ.get("RUN_NUMBER", "-")
-    sha = html.escape(os.environ.get("SHA", "-")[:12])
     owner_repo = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
     actions_url = f"https://github.com/{owner_repo}/actions/runs/{run_id}"
     root = os.environ.get("ROOT_IMPL", "ksu-next")
@@ -56,7 +55,7 @@ def main() -> int:
             "🧩 Linux 5.10 · MT6895\n"
             f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n\n"
             "🧪 <b>Actions artifact is ready for testing.</b>\n"
-            f"🆔 Run <code>#{html.escape(run_number)}</code> · <code>{sha}</code>"
+            f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
         keyboard = [
             [{"text": "🚀 Publish GitHub Release", "callback_data": f"publish:{run_id}:{run_number}"}],
@@ -86,7 +85,7 @@ def main() -> int:
             f"<b>{icon} ZEPHYR · BUILD {html.escape(state.upper())}</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
             f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
-            f"🆔 Run <code>#{html.escape(run_number)}</code> · <code>{sha}</code>"
+            f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
         keyboard = [[{"text": "🔗 GitHub Actions ↗", "url": actions_url}]]
     send(body, keyboard)
