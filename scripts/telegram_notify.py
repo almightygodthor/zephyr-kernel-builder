@@ -59,7 +59,7 @@ def main() -> int:
             "<b>⚡ ZEPHYR · BUILD COMPLETE</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
             "🧩 Linux 5.10 · MT6895\n"
-            f"🌳 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n\n"
+            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n\n"
             f"📦 <code>{html.escape(artifact_name or 'GitHub Release')}</code>"
             f" · {html.escape(artifact_size or 'size unavailable')}\n"
             f"🔐 SHA256 <code>{html.escape(artifact_sha256 or 'unavailable')}</code>\n\n"
@@ -74,7 +74,7 @@ def main() -> int:
         if release_url and download_url:
             keyboard.append([{"text": "📦 Release Page ↗", "url": release_url}])
         keyboard.append([
-            {"text": "🌳 KSU-Next ↗", "url": "https://github.com/KernelSU-Next/KernelSU-Next/releases"},
+            {"text": "🌱 KSU-Next ↗", "url": "https://github.com/KernelSU-Next/KernelSU-Next/releases"},
             {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"},
         ])
     elif state == "started":
@@ -85,7 +85,7 @@ def main() -> int:
         body = (
             f"<b>{icon} ZEPHYR · BUILD {html.escape(state.upper())}</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
-            f"🌳 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
+            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code> · <code>{sha}</code>"
         )
         keyboard = [[{"text": "🔗 GitHub Actions ↗", "url": actions_url}]]
