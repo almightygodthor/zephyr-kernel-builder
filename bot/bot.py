@@ -21,7 +21,8 @@ BRANCH = os.environ.get("GITHUB_REF", "main")
 # Keep comfortably below GitHub's 6-hour GitHub-hosted job limit.
 WORKER_SECONDS = 340 * 60
 POLL_TIMEOUT = 20
-MONITOR_INTERVAL = 15
+MONITOR_INTERVAL = 1
+GH_PROGRESS_INTERVAL = 10
 PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
 LAST_BOT_MESSAGES = {}
@@ -208,7 +209,7 @@ def build_text(root, susfs):
     susfs_label = "Enabled" if susfs else "Disabled"
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
-        f"🌳 Root · <code>{root_label}</code>\n"
+        f"🔑 Root · <code>{root_label}</code>\n"
         f"ඞ SUSFS · <code>{susfs_label}</code>\n"
         "📦 AnyKernel3 · <code>Enabled</code>\n\n"
         "Ready to build?"
@@ -345,12 +346,15 @@ def elapsed_text(run):
     return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}:{seconds % 60:02d}"
 
 
-def progress_message(run, root, susfs, frame):
-    try:
-        stage, pct, _ = job_progress(run)
-    except Exception as exc:
-        print(f"progress query failed: {exc}", file=sys.stderr)
-        stage, pct = "Checking build progress…", 0
+def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None):
+    if cached_stage is not None and cached_pct is not None:
+        stage, pct = cached_stage, cached_pct
+    else:
+        try:
+            stage, pct, _ = job_progress(run)
+        except Exception as exc:
+            print(f"progress query failed: {exc}", file=sys.stderr)
+            stage, pct = "Checking build progress…", 0
 
     blocks = 8
     filled = min(blocks, max(0, int(round(pct / 100 * blocks))))
@@ -386,6 +390,9 @@ def track_build(chat_id, message_id, run, root, susfs):
         "susfs": susfs,
         "frame": 0,
         "last_update": 0,
+        "last_gh_update": 0,
+        "stage": "Starting runner…",
+        "pct": 0,
         "last_text": "",
     }
 
@@ -399,14 +406,26 @@ def monitor_builds():
         try:
             run = get_run(item["run_id"])
             if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
-                text = progress_message(run, item["root"], item["susfs"], item["frame"])
+                if now - item.get("last_gh_update", 0) >= GH_PROGRESS_INTERVAL:
+                    try:
+                        item["stage"], item["pct"], _ = job_progress(run)
+                    except Exception as exc:
+                        print(f"progress query failed: {exc}", file=sys.stderr)
+                    item["last_gh_update"] = now
+
+                text = progress_message(
+                    run,
+                    item["root"],
+                    item["susfs"],
+                    item["frame"],
+                    item.get("stage", "Starting runner…"),
+                    item.get("pct", 0),
+                )
                 item["frame"] += 1
                 if text != item["last_text"]:
                     edit_message(chat_id, item["message_id"], text, progress_keyboard(run))
                     item["last_text"] = text
             else:
-                # The build workflow sends the authoritative compact completion/failure message.
-                # Leave the final progress card in place rather than creating a duplicate.
                 TRACKED_RUNS.pop(chat_id, None)
         except Exception as exc:
             print(f"build monitor failed for chat {chat_id}: {exc}", file=sys.stderr)
