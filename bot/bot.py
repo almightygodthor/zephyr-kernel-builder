@@ -748,7 +748,7 @@ def handle_callback(query):
             return
 
         if data == "root:sukisu-ultra":
-            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nSukiSU-Ultra selected.\n\nSUSFS is not integrated.", confirm_keyboard("sukisu-ultra"))
+            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nSukiSU-Ultra selected.", confirm_keyboard("sukisu-ultra"))
             return
 
         if data == "root:none":
