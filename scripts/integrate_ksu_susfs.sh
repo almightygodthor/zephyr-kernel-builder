@@ -12,7 +12,7 @@ if [ "$ROOT_IMPL" = "none" ]; then
   exit 0
 fi
 
-if [ "$ROOT_IMPL" != "ksu-next" ] && [ "$ROOT_IMPL" != "kernel-su" ]; then
+if [ "$ROOT_IMPL" != "ksu-next" ] && [ "$ROOT_IMPL" != "kernel-su" ] && [ "$ROOT_IMPL" != "sukisu-ultra" ]; then
   echo "Unsupported root implementation: $ROOT_IMPL"
   exit 1
 fi
@@ -27,7 +27,17 @@ SUSFS_REF="gki-android12-5.10"
 
 rm -rf KernelSU KernelSU-Next susfs4ksu
 
-if [ "$ROOT_IMPL" = "ksu-next" ]; then
+if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+  KSU_REPO="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
+  KSU_REF="builtin"
+  KSU_DIR="KernelSU"
+  echo "==> Cloning SukiSU-Ultra"
+  git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
+  if [ "$SUSFS_ENABLED" = "true" ]; then
+    KSU_REF="susfs-main"
+  fi
+  bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+elif [ "$ROOT_IMPL" = "ksu-next" ]; then
   KSU_REPO="https://github.com/pershoot/KernelSU-Next.git"
   KSU_REF="dev-susfs"
   KSU_DIR="KernelSU-Next"
@@ -47,7 +57,7 @@ if [ ! -f "$KSU_DIR/kernel/setup.sh" ]; then
   exit 1
 fi
 
-if [ "$SUSFS_ENABLED" = "true" ]; then
+if [ "$SUSFS_ENABLED" = "true" ] && [ "$ROOT_IMPL" != "sukisu-ultra" ]; then
   echo "==> Cloning SUSFS: ${SUSFS_REF}"
   git clone --depth=1 --branch "$SUSFS_REF" "$SUSFS_REPO" susfs4ksu
 
@@ -64,11 +74,13 @@ if [ "$SUSFS_ENABLED" = "true" ]; then
   echo "==> Applying SUSFS kernel patch"
   patch -p1 -ui "$PATCH"
 
-  echo "==> Installing root implementation"
-  if [ "$ROOT_IMPL" = "ksu-next" ]; then
-    bash "$KSU_DIR/kernel/setup.sh" dev-susfs
-  else
-    bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+  if [ "$ROOT_IMPL" != "sukisu-ultra" ]; then
+    echo "==> Installing root implementation"
+    if [ "$ROOT_IMPL" = "ksu-next" ]; then
+      bash "$KSU_DIR/kernel/setup.sh" dev-susfs
+    else
+      bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+    fi
   fi
 
   # The Oplus build config is merged by build.config.oplus6895. Add the
@@ -87,14 +99,22 @@ if [ "$SUSFS_ENABLED" = "true" ]; then
     echo "CONFIG_KSU_SUSFS=y"
     echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y"
   } >> "$CONFIG_FRAGMENT"
+  if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+    printf "CONFIG_KSU_SUSFS=y\nCONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y\n" >> "$CONFIG_FRAGMENT"
+  fi
 else
-  echo "==> Installing root implementation"
-  if [ "$ROOT_IMPL" = "ksu-next" ]; then
-    bash "$KSU_DIR/kernel/setup.sh" dev-susfs
-    printf "\n# KernelSU-Next\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+  if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+    echo "==> SukiSU-Ultra already integrated via builtin"
+    printf "\n# SukiSU-Ultra\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
   else
-    bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
-    printf "\n# KernelSU\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+    echo "==> Installing root implementation"
+    if [ "$ROOT_IMPL" = "ksu-next" ]; then
+      bash "$KSU_DIR/kernel/setup.sh" dev-susfs
+      printf "\n# KernelSU-Next\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+    else
+      bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+      printf "\n# KernelSU\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+    fi
   fi
 fi
 
