@@ -71,7 +71,25 @@ TELEGRAM_BOT_TOKEN
 
 **Never commit the token to the repository.**
 
-### 2. Configure the Telegram group
+### 2. Set the Telegram commands in BotFather
+
+After creating the bot, open **@BotFather** and configure its command menu:
+
+**/mybots → Your Bot → Edit Bot → Edit Commands**
+
+Paste:
+
+```
+start - Open Zephyr Kernel Builder
+kernel - Open kernel builder
+status - Check current build
+release - Manage and publish builds
+id - Show Telegram user ID
+```
+
+This only configures Telegram's command menu. The actual command handling is already implemented in `bot/bot.py`.
+
+### 3. Configure the Telegram group
 
 Add the bot to your group and give it permission to send/edit messages.
 
@@ -83,7 +101,7 @@ TELEGRAM_CHAT_ID
 
 as a GitHub Actions repository secret containing the group chat ID.
 
-### 3. Configure the owner
+### 4. Configure the owner
 
 In `bot/bot.py`, set:
 
@@ -95,7 +113,7 @@ Get your numeric Telegram ID with the bot's `/id` command.
 
 Only this account can permanently delete an Actions build. Group administrators do not automatically receive delete permission.
 
-### 4. Start the worker
+### 5. Start the worker
 
 Open:
 
