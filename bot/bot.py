@@ -27,6 +27,7 @@ MONITOR_INTERVAL = 0.5
 GH_PROGRESS_INTERVAL = 1
 PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
+STOP_REQUESTED = False
 LAST_BOT_MESSAGES = {}
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -127,7 +128,7 @@ def edit_message(chat_id, message_id, text, keyboard=None):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    if keyboard:
+    if keyboard is not None:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
     try:
         result = tg("editMessageText", payload)
@@ -177,6 +178,83 @@ def require_admin(chat_id, user_id):
     return False
 
 
+def is_owner(user_id):
+    return str(user_id) == str(DELETE_OWNER_ID)
+
+
+def stop_confirmation_keyboard():
+    return [
+        [{"text": "⛔ YES, STOP EVERYTHING", "callback_data": "stopconfirm"}],
+        [{"text": "◀️ Back", "callback_data": "stopback"}],
+    ]
+
+
+def stop_confirmation_text():
+    return (
+        "<b>⚠️ STOP ZEPHYR BOT?</b>\\n\\n"
+        "This will:\\n"
+        "• Disable new kernel builds\\n"
+        "• Disable the Telegram bot worker\\n"
+        "• Cancel active kernel builds\\n"
+        "• Cancel other active Telegram workers\\n\\n"
+        "The GitHub Release workflow will remain available.\\n\\n"
+        "Are you sure?"
+    )
+
+
+def _cancel_active_workflow_runs(workflow_id, exclude_run_id=None):
+    states = {"queued", "in_progress", "waiting", "requested", "pending"}
+    data = gh(
+        "GET",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(workflow_id, safe='')}/runs?per_page=100",
+    )
+    cancelled = 0
+    for run in data.get("workflow_runs", []):
+        run_id = run.get("id")
+        if not run_id or str(run_id) == str(exclude_run_id):
+            continue
+        if run.get("status") not in states:
+            continue
+        try:
+            gh("POST", f"/repos/{REPO}/actions/runs/{run_id}/cancel")
+            cancelled += 1
+        except Exception as exc:
+            print(f"could not cancel workflow run {run_id}: {exc}", file=sys.stderr)
+    return cancelled
+
+
+def shutdown_zephyr():
+    """Disable build/bot workflows, cancel their active runs, then stop this worker."""
+    global STOP_REQUESTED
+    current_run_id = os.environ.get("GITHUB_RUN_ID")
+    results = {"disabled": [], "disable_errors": [], "build_cancelled": 0, "bot_cancelled": 0}
+
+    # Disable first so scheduled/queued dispatches cannot create a new run
+    # while we clean up currently active runs.
+    for workflow_id, label in ((BUILD_WORKFLOW, "kernel build"), (BOT_WORKFLOW, "Telegram bot")):
+        try:
+            gh(
+                "PUT",
+                f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(workflow_id, safe='')}/disable",
+            )
+            results["disabled"].append(label)
+        except Exception as exc:
+            results["disable_errors"].append(f"{label}: {exc}")
+
+    try:
+        results["build_cancelled"] = _cancel_active_workflow_runs(BUILD_WORKFLOW)
+    except Exception as exc:
+        results["disable_errors"].append(f"kernel build cleanup: {exc}")
+
+    try:
+        results["bot_cancelled"] = _cancel_active_workflow_runs(BOT_WORKFLOW, current_run_id)
+    except Exception as exc:
+        results["disable_errors"].append(f"Telegram worker cleanup: {exc}")
+
+    STOP_REQUESTED = True
+    return results
+
+
 def menu_text():
     return (
         "<b>⚡ ZEPHYR KERNEL BUILDER</b>\n\n"
@@ -186,11 +264,14 @@ def menu_text():
     )
 
 
-def menu_keyboard():
-    return [
+def menu_keyboard(user_id=None):
+    rows = [
         [{"text": "🔨 Build Kernel", "callback_data": "build"}],
         [{"text": "📊 Current Build", "callback_data": "status"}],
     ]
+    if is_owner(user_id):
+        rows.append([{"text": "⛔ Stop Bot", "callback_data": "stopbot"}])
+    return rows
 
 
 def root_keyboard():
@@ -530,13 +611,13 @@ def handle_message(message):
 
     command = text.split()[0].split("@")[0].lower()
     if command in {"/start", "/kernel"}:
-        refresh_screen(chat_id, menu_text(), menu_keyboard())
+        refresh_screen(chat_id, menu_text(), menu_keyboard(user_id))
     elif command == "/id":
         refresh_screen(
             chat_id,
             "<b>🆔 TELEGRAM USER ID</b>\n\n"
             f"User <code>{esc(user_id)}</code>",
-            menu_keyboard(),
+            menu_keyboard(user_id),
         )
     elif command == "/release":
         if not require_admin(chat_id, user_id):
@@ -551,7 +632,7 @@ def handle_message(message):
             kb = release_list_keyboard(runs)
         else:
             text = "🟢 <b>No unpublished successful builds found.</b>"
-            kb = menu_keyboard()
+            kb = menu_keyboard(user_id)
         if target_id:
             edit_message(chat_id, target_id, text, kb)
         else:
@@ -599,7 +680,7 @@ def handle_message(message):
                 refresh_screen(
                     chat_id,
                     "🟢 <b>No build is currently running.</b>",
-                    menu_keyboard(),
+                    menu_keyboard(user_id),
                 )
 
 def handle_callback(query):
@@ -615,6 +696,64 @@ def handle_callback(query):
 
     if not is_admin(chat_id, user_id):
         edit_message(chat_id, message_id, "⛔ <b>Admin only.</b>")
+        return
+
+    if data == "stopbot":
+        if not is_owner(user_id):
+            answer_callback(query_id, "Only the bot owner can stop Zephyr.", True)
+            return
+        edit_message(
+            chat_id,
+            message_id,
+            stop_confirmation_text(),
+            stop_confirmation_keyboard(),
+        )
+        return
+
+    if data == "stopback":
+        if not is_owner(user_id):
+            answer_callback(query_id, "Only the bot owner can use this control.", True)
+            return
+        edit_message(chat_id, message_id, menu_text(), menu_keyboard(user_id))
+        return
+
+    if data == "stopconfirm":
+        if not is_owner(user_id):
+            answer_callback(query_id, "Only the bot owner can stop Zephyr.", True)
+            return
+
+        edit_message(
+            chat_id,
+            message_id,
+            "<b>⏳ STOPPING ZEPHYR…</b>\\n\\n"
+            "Disabling workflows and cancelling active runs…",
+        )
+        result = shutdown_zephyr()
+        if result["disable_errors"]:
+            details = "\\n".join(f"• {esc(item)}" for item in result["disable_errors"])
+            edit_message(
+                chat_id,
+                message_id,
+                "⚠️ <b>ZEPHYR STOP PARTIALLY FAILED</b>\\n\\n"
+                f"Disabled: {', '.join(result['disabled']) or 'none'}\\n"
+                f"Cancelled builds: {result['build_cancelled']}\\n"
+                f"Cancelled workers: {result['bot_cancelled']}\\n\\n"
+                f"<code>{details}</code>",
+                [],
+            )
+        else:
+            edit_message(
+                chat_id,
+                message_id,
+                "<b>⛔ ZEPHYR BOT STOPPED</b>\\n\\n"
+                "🛑 Kernel builds · <b>OFF</b>\\n"
+                "🛑 Telegram worker · <b>OFF</b>\\n"
+                f"🧹 Active builds cancelled · <b>{result['build_cancelled']}</b>\\n"
+                f"🧹 Other workers cancelled · <b>{result['bot_cancelled']}</b>\\n\\n"
+                "GitHub Release remains available.\\n\\n"
+                "To start again, re-enable and manually run the Telegram Bot workflow in GitHub Actions.",
+                [],
+            )
         return
 
     try:
@@ -676,7 +815,7 @@ def handle_callback(query):
                 edit_message(
                     chat_id, message_id,
                     "⚠️ <b>Build dispatched</b>\nGitHub has not created the run yet.",
-                    menu_keyboard(),
+                    menu_keyboard(user_id),
                 )
                 return
 
@@ -727,7 +866,7 @@ def handle_callback(query):
                     edit_message(
                         chat_id, message_id,
                         "🟢 <b>No build is currently running.</b>",
-                        menu_keyboard(),
+                        menu_keyboard(user_id),
                     )
             return
 
@@ -740,7 +879,7 @@ def handle_callback(query):
                     chat_id, message_id,
                     "<b>📦 RELEASE ALREADY PUBLISHED</b>\n\n"
                     f"Run <code>#{esc(run_number)}</code> is already released.",
-                    [[{"text": "📦 GitHub Release ↗", "url": release_url}]] if release_url else menu_keyboard(),
+                    [[{"text": "📦 GitHub Release ↗", "url": release_url}]] if release_url else menu_keyboard(user_id),
                 )
                 return
             dispatch_release(run_id, run_number)
@@ -776,7 +915,7 @@ def handle_callback(query):
                 chat_id, message_id,
                 "🗑️ <b>BUILD DELETED</b>\n\n"
                 "The GitHub Actions run and its Actions artifacts have been removed.",
-                menu_keyboard(),
+                menu_keyboard(user_id),
             )
             return
 
@@ -803,16 +942,16 @@ def handle_callback(query):
             run_id = data.split(":", 1)[1]
             gh("POST", f"/repos/{REPO}/actions/runs/{run_id}/cancel")
             TRACKED_RUNS.pop(chat_id, None)
-            edit_message(chat_id, message_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard())
+            edit_message(chat_id, message_id, "🛑 <b>Build cancellation requested.</b>", menu_keyboard(user_id))
             return
 
         if data == "cancel":
-            edit_message(chat_id, message_id, menu_text(), menu_keyboard())
+            edit_message(chat_id, message_id, menu_text(), menu_keyboard(user_id))
             return
 
     except Exception as exc:
         print(f"callback {data!r} failed: {exc}", file=sys.stderr)
-        edit_message(chat_id, message_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard())
+        edit_message(chat_id, message_id, f"❌ <b>Action failed</b>\n<code>{esc(exc)}</code>", menu_keyboard(user_id))
 
 
 def schedule_next_worker():
@@ -853,7 +992,7 @@ def main():
     deadline = time.monotonic() + WORKER_SECONDS
     offset = 0
 
-    while time.monotonic() < deadline:
+    while time.monotonic() < deadline and not STOP_REQUESTED:
         remaining = max(1, int(deadline - time.monotonic()))
         poll_timeout = min(POLL_TIMEOUT, remaining)
 
@@ -882,7 +1021,8 @@ def main():
         except Exception as exc:
             print(f"monitor loop failed: {exc}", file=sys.stderr)
 
-    schedule_next_worker()
+    if not STOP_REQUESTED:
+        schedule_next_worker()
 
     try:
         tg(
