@@ -245,6 +245,29 @@ def active_run():
 def get_run(run_id):
     return gh("GET", f"/repos/{REPO}/actions/runs/{run_id}")
 
+
+def run_config(run):
+    """Recover root/SUSFS from the workflow run name after a worker restart."""
+    name = str(run.get("name", "")).lower()
+    root = "ksu-next" if "· ksu-next ·" in name else "none"
+    susfs = "· susfs true ·" in name
+    return root, susfs
+
+
+def refresh_tracked_screen(chat_id, item, text, keyboard):
+    """Edit the tracked build card, or recreate it if the old card was deleted."""
+    message_id = item.get("message_id")
+    try:
+        edit_message(chat_id, message_id, text, keyboard)
+        return message_id
+    except APIError as exc:
+        print(f"tracked message refresh failed for chat {chat_id}: {exc}", file=sys.stderr)
+        msg = send_fresh(chat_id, text, keyboard)
+        new_id = msg.get("message_id") if isinstance(msg, dict) else None
+        if new_id:
+            item["message_id"] = new_id
+        return new_id
+
 def release_for_run(run_number):
     try:
         return gh("GET", f"/repos/{REPO}/releases/tags/zephyr-run{run_number}")
@@ -488,7 +511,7 @@ def monitor_builds():
                 )
                 item["frame"] += 1
                 if text != item["last_text"]:
-                    edit_message(chat_id, item["message_id"], text, progress_keyboard(run))
+                    refresh_tracked_screen(chat_id, item, text, progress_keyboard(run))
                     item["last_text"] = text
             else:
                 TRACKED_RUNS.pop(chat_id, None)
@@ -545,26 +568,33 @@ def handle_message(message):
         if run and run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
             text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
             tracked["frame"] += 1
-            edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
+            refresh_tracked_screen(chat_id, tracked, text, progress_keyboard(run))
             tracked["last_text"] = text
         else:
             run = active_run()
             target_id = tracked["message_id"] if tracked else LAST_BOT_MESSAGES.get(chat_id)
             if run:
+                root, susfs = run_config(run)
                 if target_id:
-                    edit_message(
-                        chat_id, target_id,
-                        progress_message(run, "ksu-next", False, 0),
-                        progress_keyboard(run),
-                    )
-                    track_build(chat_id, target_id, run, "ksu-next", False)
+                    text = progress_message(run, root, susfs, 0)
+                    if tracked:
+                        tracked["root"], tracked["susfs"] = root, susfs
+                        refresh_tracked_screen(chat_id, tracked, text, progress_keyboard(run))
+                        target_id = tracked["message_id"]
+                    else:
+                        try:
+                            edit_message(chat_id, target_id, text, progress_keyboard(run))
+                        except APIError:
+                            msg = send_fresh(chat_id, text, progress_keyboard(run))
+                            target_id = msg["message_id"]
+                    track_build(chat_id, target_id, run, root, susfs)
                 else:
                     msg = send_fresh(
                         chat_id,
-                        progress_message(run, "ksu-next", False, 0),
+                        progress_message(run, root, susfs, 0),
                         progress_keyboard(run),
                     )
-                    track_build(chat_id, msg["message_id"], run, "ksu-next", False)
+                    track_build(chat_id, msg["message_id"], run, root, susfs)
             else:
                 refresh_screen(
                     chat_id,
@@ -685,12 +715,14 @@ def handle_callback(query):
             else:
                 run = active_run()
                 if run:
-                    edit_message(
-                        chat_id, message_id,
-                        progress_message(run, "ksu-next", False, 0),
-                        progress_keyboard(run),
-                    )
-                    track_build(chat_id, message_id, run, "ksu-next", False)
+                    root, susfs = run_config(run)
+                    text = progress_message(run, root, susfs, 0)
+                    try:
+                        edit_message(chat_id, message_id, text, progress_keyboard(run))
+                    except APIError:
+                        msg = send_fresh(chat_id, text, progress_keyboard(run))
+                        message_id = msg["message_id"]
+                    track_build(chat_id, message_id, run, root, susfs)
                 else:
                     edit_message(
                         chat_id, message_id,
