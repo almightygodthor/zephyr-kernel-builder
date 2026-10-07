@@ -43,11 +43,10 @@ def main() -> int:
     owner_repo = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
     actions_url = f"https://github.com/{owner_repo}/actions/runs/{run_id}"
     root = os.environ.get("ROOT_IMPL", "ksu-next")
-    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
     root_releases = {
         "ksu-next": "https://github.com/KernelSU-Next/KernelSU-Next/releases",
         "kernel-su": "https://github.com/tiann/KernelSU/releases",
-        "sukisu-ultra": "https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases",
     }.get(root)
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
 
