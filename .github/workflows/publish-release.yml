@@ -22,6 +22,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -71,7 +74,10 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; reusing it."
           else
-            gh release create "$TAG" "$ZIP"               --target "$SHA"               --title "$TITLE"               --notes-file "$NOTES"
+            gh release create "$TAG" "$ZIP" \
+              --target "$SHA" \
+              --title "$TITLE" \
+              --notes-file "$NOTES"
           fi
 
           RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
