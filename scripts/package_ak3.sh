@@ -16,6 +16,7 @@ TS="$(date -u +%Y%m%d-%H%M)"
 ROOT_LABEL="NoRoot"
 [ "$ROOT_IMPL" = "ksu-next" ] && ROOT_LABEL="KSU-Next"
 [ "$ROOT_IMPL" = "kernel-su" ] && ROOT_LABEL="KernelSU"
+[ "$ROOT_IMPL" = "sukisu-ultra" ] && ROOT_LABEL="SukiSU-Ultra"
 NAME="Zephyr-${ROOT_LABEL}-${TS}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
