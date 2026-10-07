@@ -117,7 +117,7 @@ def send_fresh(chat_id, text, keyboard=None):
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
-    """Edit an existing Telegram message without ever creating a replacement."""
+    """Edit an existing Telegram message; raise if it cannot be edited."""
     if message_id is None:
         return send_fresh(chat_id, text, keyboard)
     payload = {
@@ -130,14 +130,26 @@ def edit_message(chat_id, message_id, text, keyboard=None):
     if keyboard:
         payload["reply_markup"] = {"inline_keyboard": keyboard}
     try:
-        return tg("editMessageText", payload)
+        result = tg("editMessageText", payload)
+        LAST_BOT_MESSAGES[chat_id] = message_id
+        return result
     except APIError as exc:
-        # Telegram returns this when the selected screen is already identical.
         if "message is not modified" in str(exc).lower():
+            LAST_BOT_MESSAGES[chat_id] = message_id
             return None
         raise
 
 
+def refresh_screen(chat_id, text, keyboard=None):
+    """Refresh the bot's last screen, or create a new one if it was deleted."""
+    message_id = LAST_BOT_MESSAGES.get(chat_id)
+    if message_id is not None:
+        try:
+            return edit_message(chat_id, message_id, text, keyboard)
+        except APIError as exc:
+            print(f"refresh edit failed for chat {chat_id}: {exc}", file=sys.stderr)
+            LAST_BOT_MESSAGES.pop(chat_id, None)
+    return send_fresh(chat_id, text, keyboard)
 def answer_callback(query_id, text="", show_alert=False):
     try:
         tg("answerCallbackQuery", {
@@ -495,12 +507,14 @@ def handle_message(message):
 
     command = text.split()[0].split("@")[0].lower()
     if command in {"/start", "/kernel"}:
-        if require_admin(chat_id, user_id):
-            target_id = LAST_BOT_MESSAGES.get(chat_id)
-            if target_id:
-                edit_message(chat_id, target_id, menu_text(), menu_keyboard())
-            else:
-                send_fresh(chat_id, menu_text(), menu_keyboard())
+        refresh_screen(chat_id, menu_text(), menu_keyboard())
+    elif command == "/id":
+        refresh_screen(
+            chat_id,
+            "<b>🆔 TELEGRAM USER ID</b>\n\n"
+            f"User <code>{esc(user_id)}</code>",
+            menu_keyboard(),
+        )
     elif command == "/release":
         if not require_admin(chat_id, user_id):
             return
@@ -520,8 +534,6 @@ def handle_message(message):
         else:
             send_fresh(chat_id, text, kb)
     elif command == "/status":
-        if not require_admin(chat_id, user_id):
-            return
         tracked = TRACKED_RUNS.get(chat_id)
         run = None
         if tracked:
@@ -553,14 +565,12 @@ def handle_message(message):
                         progress_keyboard(run),
                     )
                     track_build(chat_id, msg["message_id"], run, "ksu-next", False)
-            elif target_id:
-                edit_message(
-                    chat_id, target_id,
+            else:
+                refresh_screen(
+                    chat_id,
                     "🟢 <b>No build is currently running.</b>",
                     menu_keyboard(),
                 )
-            else:
-                send_fresh(chat_id, "🟢 <b>No build is currently running.</b>", menu_keyboard())
 
 def handle_callback(query):
     query_id = query.get("id")
