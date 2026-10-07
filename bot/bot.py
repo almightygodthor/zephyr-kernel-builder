@@ -725,19 +725,19 @@ def handle_callback(query):
         edit_message(
             chat_id,
             message_id,
-            "<b>⏳ STOPPING ZEPHYR…</b>\\n\\n"
+            "<b>⏳ STOPPING ZEPHYR…</b>\n\n"
             "Disabling workflows and cancelling active runs…",
         )
         result = shutdown_zephyr()
         if result["disable_errors"]:
-            details = "\\n".join(f"• {esc(item)}" for item in result["disable_errors"])
+            details = "\n".join(f"• {esc(item)}" for item in result["disable_errors"])
             edit_message(
                 chat_id,
                 message_id,
-                "⚠️ <b>ZEPHYR STOP PARTIALLY FAILED</b>\\n\\n"
-                f"Disabled: {', '.join(result['disabled']) or 'none'}\\n"
-                f"Cancelled builds: {result['build_cancelled']}\\n"
-                f"Cancelled workers: {result['bot_cancelled']}\\n\\n"
+                "⚠️ <b>ZEPHYR STOP PARTIALLY FAILED</b>\n\n"
+                f"Disabled: {', '.join(result['disabled']) or 'none'}\n"
+                f"Cancelled builds: {result['build_cancelled']}\n"
+                f"Cancelled workers: {result['bot_cancelled']}\n\n"
                 f"<code>{details}</code>",
                 [],
             )
@@ -745,12 +745,12 @@ def handle_callback(query):
             edit_message(
                 chat_id,
                 message_id,
-                "<b>⛔ ZEPHYR BOT STOPPED</b>\\n\\n"
-                "🛑 Kernel builds · <b>OFF</b>\\n"
-                "🛑 Telegram worker · <b>OFF</b>\\n"
-                f"🧹 Active builds cancelled · <b>{result['build_cancelled']}</b>\\n"
-                f"🧹 Other workers cancelled · <b>{result['bot_cancelled']}</b>\\n\\n"
-                "GitHub Release remains available.\\n\\n"
+                "<b>⛔ ZEPHYR BOT STOPPED</b>\n\n"
+                "🛑 Kernel builds · <b>OFF</b>\n"
+                "🛑 Telegram worker · <b>OFF</b>\n"
+                f"🧹 Active builds cancelled · <b>{result['build_cancelled']}</b>\n"
+                f"🧹 Other workers cancelled · <b>{result['bot_cancelled']}</b>\n\n"
+                "GitHub Release remains available.\n\n"
                 "To start again, re-enable and manually run the Telegram Bot workflow in GitHub Actions.",
                 [],
             )
