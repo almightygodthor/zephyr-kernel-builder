@@ -781,8 +781,11 @@ def handle_callback(query):
             return
 
         if data == "root:kernel-su":
-            PENDING_CONFIGS[chat_id] = {"root": "kernel-su", "susfs": False}
-            edit_message(chat_id, message_id, build_text("kernel-su", False), confirm_keyboard("kernel-su", False))
+            edit_message(
+                chat_id, message_id,
+                "<b>ඞ SELECT SUSFS</b>\n\nKernelSU selected.",
+                susfs_keyboard("kernel-su"),
+            )
             return
 
         if data == "root:none":
@@ -795,7 +798,7 @@ def handle_callback(query):
 
         if data.startswith("susfs:"):
             _, root, state = data.split(":", 2)
-            if root != "ksu-next" or state not in {"on", "off"}:
+            if root not in {"ksu-next", "kernel-su"} or state not in {"on", "off"}:
                 raise APIError("invalid SUSFS selection")
             susfs = state == "on"
             PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
