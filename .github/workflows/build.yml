@@ -170,7 +170,7 @@ jobs:
           ZIP="$(find ../artifacts -maxdepth 1 -type f -name "*.zip" -print -quit)"
           test -n "$ZIP" -a -f "$ZIP"
           ZIP_SIZE="$(du -h "$ZIP" | awk "{print \$1}")"
-          if [ "$ROOT_IMPL" = "kernel-su" ]; then
+          if [ "$ROOT_IMPL" = "kernel-su" ] || [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
             KSU_COMMIT="$(git -C kernel-5.10/KernelSU rev-parse HEAD 2>/dev/null || echo none)"
             KSU_REF="$(git -C kernel-5.10/KernelSU describe --tags --always 2>/dev/null || echo unknown)"
           else
