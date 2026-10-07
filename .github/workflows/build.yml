@@ -12,6 +12,7 @@ on:
         type: choice
         options:
           - ksu-next
+          - kernel-su
           - none
       susfs:
         description: Enable SUSFS
@@ -126,7 +127,7 @@ jobs:
           echo "=== active build.config ==="
           cat build.config
 
-      - name: Integrate KernelSU-Next and SUSFS
+      - name: Integrate KernelSU / KernelSU-Next and SUSFS
         env:
           SUSFS_ENABLED: ${{ inputs.susfs || 'true' }}
         run: |
@@ -168,8 +169,13 @@ jobs:
           ZIP="$(find ../artifacts -maxdepth 1 -type f -name "*.zip" -print -quit)"
           test -n "$ZIP" -a -f "$ZIP"
           ZIP_SIZE="$(du -h "$ZIP" | awk "{print \$1}")"
-          KSU_COMMIT="$(git -C kernel-5.10/KernelSU-Next rev-parse HEAD 2>/dev/null || echo none)"
-          KSU_REF="dev-susfs"
+          if [ "$ROOT_IMPL" = "kernel-su" ]; then
+            KSU_COMMIT="$(git -C kernel-5.10/KernelSU rev-parse HEAD 2>/dev/null || echo none)"
+            KSU_REF="$(git -C kernel-5.10/KernelSU describe --tags --always 2>/dev/null || echo unknown)"
+          else
+            KSU_COMMIT="$(git -C kernel-5.10/KernelSU-Next rev-parse HEAD 2>/dev/null || echo none)"
+            KSU_REF="dev-susfs"
+          fi
           SUSFS_COMMIT="$(git -C kernel-5.10/susfs4ksu rev-parse HEAD 2>/dev/null || echo disabled)"
           SUSFS_REF="gki-android12-5.10"
           BUILD_TS="$(date -u +%Y%m%d-%H%M%S)"
