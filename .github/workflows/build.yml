@@ -1,5 +1,7 @@
 name: Zephyr Kernel Build
 
+run-name: Zephyr Kernel · ${{ inputs.root }} · SUSFS ${{ inputs.susfs }} · AK3 ${{ inputs.build_ak3 }}
+
 on:
   workflow_dispatch:
     inputs:
