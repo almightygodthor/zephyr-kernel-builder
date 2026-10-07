@@ -69,6 +69,7 @@ def main() -> int:
             "<b>🚀 ZEPHYR · RELEASE PUBLISHED</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
             "🧩 Linux 5.10 · MT6895\n"
+            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
         keyboard = []
