@@ -13,7 +13,6 @@ on:
         options:
           - ksu-next
           - kernel-su
-          - sukisu-ultra
           - none
       build_ak3:
         description: Package AnyKernel3 ZIP
