@@ -539,7 +539,7 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
     filled = min(blocks, max(0, int(round(pct / 100 * blocks))))
     bar = "█" * filled + "░" * (blocks - filled)
     spin = SPINNER[frame % len(SPINNER)]
-    root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
+    root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
     susfs_label = "SUSFS" if susfs else "No SUSFS"
 
     return (
@@ -806,6 +806,14 @@ def handle_callback(query):
                 chat_id, message_id,
                 "<b>ඞ SELECT SUSFS</b>\n\nKernelSU selected.",
                 susfs_keyboard("kernel-su"),
+            )
+            return
+
+        if data == "root:sukisu-ultra":
+            edit_message(
+                chat_id, message_id,
+                "<b>ඞ SELECT SUSFS</b>\n\nSukiSU-Ultra selected.",
+                susfs_keyboard("sukisu-ultra"),
             )
             return
 
