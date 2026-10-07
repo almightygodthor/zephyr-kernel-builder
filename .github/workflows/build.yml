@@ -1,6 +1,6 @@
 name: Zephyr Kernel Build
 
-run-name: Zephyr Kernel · ${{ inputs.root }} · SUSFS ${{ inputs.susfs }} · AK3 ${{ inputs.build_ak3 }}
+run-name: Zephyr Kernel · ${{ inputs.root }} · AK3 ${{ inputs.build_ak3 }}
 
 on:
   workflow_dispatch:
@@ -15,11 +15,6 @@ on:
           - kernel-su
           - sukisu-ultra
           - none
-      susfs:
-        description: Enable SUSFS
-        required: true
-        default: true
-        type: boolean
       build_ak3:
         description: Package AnyKernel3 ZIP
         required: true
@@ -128,12 +123,10 @@ jobs:
           echo "=== active build.config ==="
           cat build.config
 
-      - name: Integrate KernelSU / KernelSU-Next and SUSFS
-        env:
-          SUSFS_ENABLED: ${{ inputs.susfs || 'true' }}
+      - name: Integrate KernelSU / KernelSU-Next
         run: |
-          chmod +x scripts/integrate_ksu_susfs.sh
-          scripts/integrate_ksu_susfs.sh workspace/kernel-5.10 "${{ inputs.root }}" "${SUSFS_ENABLED}"
+          chmod +x scripts/integrate_root.sh
+          scripts/integrate_root.sh workspace/kernel-5.10 "${{ inputs.root }}"
 
       - name: Build Image.gz
         working-directory: workspace
@@ -156,32 +149,32 @@ jobs:
         if: ${{ inputs.build_ak3 != false }}
         run: |
           chmod +x scripts/package_ak3.sh
-          scripts/package_ak3.sh workspace/kernel-5.10 workspace/out "${{ inputs.root }}" "${{ inputs.susfs }}"
+          scripts/package_ak3.sh workspace/kernel-5.10 workspace/out "${{ inputs.root }}"
 
       - name: Prepare release metadata
         if: ${{ success() && inputs.build_ak3 != false }}
         working-directory: workspace
         env:
           ROOT_IMPL: ${{ inputs.root }}
-          SUSFS_ENABLED: ${{ inputs.susfs }}
         run: |
           mkdir -p ../release
           IMAGE="out/kernel-5.10/arch/arm64/boot/Image.gz"
           ZIP="$(find ../artifacts -maxdepth 1 -type f -name "*.zip" -print -quit)"
           test -n "$ZIP" -a -f "$ZIP"
           ZIP_SIZE="$(du -h "$ZIP" | awk "{print \$1}")"
-          if [ "$ROOT_IMPL" = "kernel-su" ] || [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+          if [ "$ROOT_IMPL" = "kernel-su" ]; then
             KSU_COMMIT="$(git -C kernel-5.10/KernelSU rev-parse HEAD 2>/dev/null || echo none)"
             KSU_REF="$(git -C kernel-5.10/KernelSU describe --tags --always 2>/dev/null || echo unknown)"
-          else
+          elif [ "$ROOT_IMPL" = "ksu-next" ]; then
             KSU_COMMIT="$(git -C kernel-5.10/KernelSU-Next rev-parse HEAD 2>/dev/null || echo none)"
-            KSU_REF="dev-susfs"
+            KSU_REF="$(git -C kernel-5.10/KernelSU-Next describe --tags --always 2>/dev/null || echo unknown)"
+          else
+            KSU_COMMIT="none"
+            KSU_REF="none"
           fi
-          SUSFS_COMMIT="$(git -C kernel-5.10/susfs4ksu rev-parse HEAD 2>/dev/null || echo disabled)"
-          SUSFS_REF="gki-android12-5.10"
           BUILD_TS="$(date -u +%Y%m%d-%H%M%S)"
           TAG="zephyr-run${GITHUB_RUN_NUMBER}"
-          RELEASE_TITLE="Zephyr Kernel ${BUILD_TS} — ${ROOT_IMPL}$( [ "$SUSFS_ENABLED" = "true" ] && printf " + SUSFS" )"
+          RELEASE_TITLE="Zephyr Kernel ${BUILD_TS} — ${ROOT_IMPL}"
           printf "%s\n" "$TAG" > ../release/TAG
           printf "%s\n" "$RELEASE_TITLE" > ../release/TITLE
           printf "%s\n" "$(basename "$ZIP")" > ../release/ZIP_NAME
@@ -191,7 +184,7 @@ jobs:
 
           GT Neo 3 (zephyr) · MT6895 · Linux 5.10
 
-          **Root:** `${ROOT_IMPL}` · **SUSFS:** `$SUSFS_ENABLED` · **AK3:** Enabled
+          **Root:** `${ROOT_IMPL}` · **AK3:** Enabled
 
           EOF
 
@@ -223,5 +216,4 @@ jobs:
           SHA: ${{ github.sha }}
           JOB_STATUS: ${{ job.status }}
           ROOT_IMPL: ${{ inputs.root }}
-          SUSFS_ENABLED: ${{ inputs.susfs }}
         run: python3 scripts/telegram_notify.py "${JOB_STATUS}"
