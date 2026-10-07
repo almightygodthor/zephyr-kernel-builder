@@ -393,6 +393,13 @@ def dispatch_build(root, susfs):
     if active:
         return None, active
 
+    # Stop Bot intentionally disables the kernel workflow. Re-enable it
+    # automatically whenever a build is started from Telegram.
+    gh(
+        "PUT",
+        f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/enable",
+    )
+
     result = gh(
         "POST",
         f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/dispatches",
