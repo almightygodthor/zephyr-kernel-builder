@@ -277,6 +277,7 @@ def menu_keyboard(user_id=None):
 def root_keyboard():
     return [
         [{"text": "🌱 KernelSU-Next", "callback_data": "root:ksu-next"}],
+        [{"text": "🛡️ KernelSU", "callback_data": "root:kernel-su"}],
         [{"text": "⚪ No Root", "callback_data": "root:none"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
@@ -300,7 +301,7 @@ def confirm_keyboard(root, susfs):
 
 
 def build_text(root, susfs):
-    root_label = "KernelSU-Next" if root == "ksu-next" else "No Root"
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
     susfs_label = "Enabled" if susfs else "Disabled"
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
@@ -330,7 +331,12 @@ def get_run(run_id):
 def run_config(run):
     """Recover root/SUSFS from the workflow run name after a worker restart."""
     name = str(run.get("name", "")).lower()
-    root = "ksu-next" if "· ksu-next ·" in name else "none"
+    if "· kernel-su ·" in name:
+        root = "kernel-su"
+    elif "· ksu-next ·" in name:
+        root = "ksu-next"
+    else:
+        root = "none"
     susfs = "· susfs true ·" in name
     return root, susfs
 
@@ -774,6 +780,11 @@ def handle_callback(query):
             )
             return
 
+        if data == "root:kernel-su":
+            PENDING_CONFIGS[chat_id] = {"root": "kernel-su", "susfs": False}
+            edit_message(chat_id, message_id, build_text("kernel-su", False), confirm_keyboard("kernel-su", False))
+            return
+
         if data == "root:none":
             edit_message(
                 chat_id, message_id,
@@ -793,7 +804,7 @@ def handle_callback(query):
 
         if data.startswith("confirm:"):
             _, root, state = data.split(":", 2)
-            if root not in {"ksu-next", "none"} or state not in {"on", "off"}:
+            if root not in {"ksu-next", "kernel-su", "none"} or state not in {"on", "off"}:
                 raise APIError("invalid build selection")
 
             pending = PENDING_CONFIGS.pop(chat_id, None)
