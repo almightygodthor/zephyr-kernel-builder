@@ -43,7 +43,7 @@ def main() -> int:
     owner_repo = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
     actions_url = f"https://github.com/{owner_repo}/actions/runs/{run_id}"
     root = os.environ.get("ROOT_IMPL", "ksu-next")
-    root_label = "KernelSU-Next" if root == "ksu-next" else "No Root"
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
     susfs = os.environ.get("SUSFS_ENABLED", "false").lower() == "true"
     susfs_label = "SUSFS" if susfs else "No SUSFS"
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
@@ -76,7 +76,7 @@ def main() -> int:
             keyboard.append([{"text": "⬇️ Download Kernel ZIP", "url": download_url}])
         if release_url:
             keyboard.append([{"text": "📦 GitHub Release ↗", "url": release_url}])
-        keyboard.append([{"text": "🌱 KSU-Next ↗", "url": "https://github.com/KernelSU-Next/KernelSU-Next/releases"}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
+        keyboard.append([{"text": "🌱 KernelSU ↗", "url": "https://github.com/tiann/KernelSU/releases"}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
     elif state == "started":
         # The Telegram worker already owns the single live build card.
         # Avoid creating a second BUILD STARTED message from the Actions workflow.
