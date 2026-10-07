@@ -12,7 +12,7 @@ if [ "$ROOT_IMPL" = "none" ]; then
 fi
 
 case "$ROOT_IMPL" in
-  ksu-next|kernel-su) ;;
+  ksu-next|kernel-su|sukisu-ultra) ;;
   *) echo "Unsupported root implementation: $ROOT_IMPL"; exit 1 ;;
 esac
 
@@ -25,11 +25,16 @@ if [ "$ROOT_IMPL" = "ksu-next" ]; then
   KSU_DIR="KernelSU-Next"
   echo "==> Cloning KernelSU-Next"
   git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
-else
+elif [ "$ROOT_IMPL" = "kernel-su" ]; then
   KSU_REPO="https://github.com/tiann/KernelSU.git"
   KSU_DIR="KernelSU"
   echo "==> Cloning KernelSU"
   git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
+else
+  KSU_REPO="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
+  KSU_DIR="SukiSU-Ultra"
+  echo "==> Cloning SukiSU-Ultra"
+  git clone --depth=1 --branch main "$KSU_REPO" "$KSU_DIR"
 fi
 
 if [ ! -f "$KSU_DIR/kernel/setup.sh" ]; then
@@ -38,7 +43,11 @@ if [ ! -f "$KSU_DIR/kernel/setup.sh" ]; then
 fi
 
 echo "==> Installing $ROOT_IMPL"
-bash "$KSU_DIR/kernel/setup.sh"
+if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+  bash "$KSU_DIR/kernel/setup.sh" main
+else
+  bash "$KSU_DIR/kernel/setup.sh"
+fi
 
 {
   echo
