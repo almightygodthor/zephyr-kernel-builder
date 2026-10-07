@@ -24,12 +24,11 @@ SUSFS_REF="gki-android12-5.10"
 rm -rf KernelSU KernelSU-Next susfs4ksu
 
 if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
-  # SukiSU-Ultra carries its own kernel integration. Its builtin branch is
-  # intended for kernels compiled into the image; susfs-main adds SUSFS.
+  # SukiSU-Ultra's builtin branch is the self-contained built-in integration
+  # and also carries the SUSFS Kconfig/implementation.
   KSU_REPO="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
   KSU_DIR="KernelSU"
   KSU_REF="builtin"
-  [ "$SUSFS_ENABLED" = "true" ] && KSU_REF="susfs-main"
 
   echo "==> Cloning SukiSU-Ultra"
   git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
@@ -45,11 +44,22 @@ if [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
   } >> "$CONFIG_FRAGMENT"
 
   if [ "$SUSFS_ENABLED" = "true" ]; then
-    echo "==> SukiSU-Ultra SUSFS is bundled in $KSU_REF"
+    echo "==> Enabling SukiSU-Ultra SUSFS"
     {
       echo "CONFIG_KSU_SUSFS=y"
-      echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
+      echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y"
+      echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+      echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y"
+      echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+      echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
+      echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_MAP=y"
     } >> "$CONFIG_FRAGMENT"
+  else
+    echo "==> Disabling SukiSU-Ultra SUSFS"
+    echo "CONFIG_KSU_SUSFS=n" >> "$CONFIG_FRAGMENT"
   fi
 else
   if [ "$ROOT_IMPL" = "ksu-next" ]; then
