@@ -13,6 +13,7 @@ on:
         options:
           - ksu-next
           - kernel-su
+          - sukisu-ultra
           - none
       susfs:
         description: Enable SUSFS
