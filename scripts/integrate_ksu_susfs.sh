@@ -12,7 +12,7 @@ if [ "$ROOT_IMPL" = "none" ]; then
   exit 0
 fi
 
-if [ "$ROOT_IMPL" != "ksu-next" ]; then
+if [ "$ROOT_IMPL" != "ksu-next" ] && [ "$ROOT_IMPL" != "kernel-su" ]; then
   echo "Unsupported root implementation: $ROOT_IMPL"
   exit 1
 fi
@@ -25,13 +25,25 @@ KSU_REF="dev-susfs"
 SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"
 SUSFS_REF="gki-android12-5.10"
 
-rm -rf KernelSU-Next susfs4ksu
+rm -rf KernelSU KernelSU-Next susfs4ksu
 
-echo "==> Cloning KernelSU-Next: ${KSU_REF}"
-git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" KernelSU-Next
+if [ "$ROOT_IMPL" = "ksu-next" ]; then
+  KSU_REPO="https://github.com/pershoot/KernelSU-Next.git"
+  KSU_REF="dev-susfs"
+  KSU_DIR="KernelSU-Next"
+  echo "==> Cloning KernelSU-Next"
+  git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" "$KSU_DIR"
+else
+  KSU_REPO="https://github.com/tiann/KernelSU.git"
+  KSU_REF="$(git ls-remote --tags --refs "$KSU_REPO" 'v*' | tail -n1 | sed 's#.*refs/tags/##')"
+  [ -n "$KSU_REF" ] || { echo "Could not determine latest KernelSU tag"; exit 1; }
+  KSU_DIR="KernelSU"
+  echo "==> Cloning KernelSU"
+  git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" "$KSU_DIR"
+fi
 
-if [ ! -f KernelSU-Next/kernel/setup.sh ]; then
-  echo "KernelSU-Next setup.sh not found"
+if [ ! -f "$KSU_DIR/kernel/setup.sh" ]; then
+  echo "KernelSU setup.sh not found"
   exit 1
 fi
 
@@ -52,8 +64,12 @@ if [ "$SUSFS_ENABLED" = "true" ]; then
   echo "==> Applying SUSFS kernel patch"
   patch -p1 -ui "$PATCH"
 
-  echo "==> Installing KernelSU-Next"
-  bash KernelSU-Next/kernel/setup.sh dev-susfs
+  echo "==> Installing root implementation"
+  if [ "$ROOT_IMPL" = "ksu-next" ]; then
+    bash "$KSU_DIR/kernel/setup.sh" dev-susfs
+  else
+    bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+  fi
 
   # The Oplus build config is merged by build.config.oplus6895. Add the
   # required root/SUSFS symbols to that temporary fragment instead of
@@ -76,6 +92,6 @@ else
 fi
 
 echo "==> Verifying integration"
-test -d KernelSU-Next/kernel
-grep -R "config KSU" -n KernelSU-Next/kernel/Kconfig 2>/dev/null || true
+test -d "$KSU_DIR/kernel"
+grep -R "config KSU" -n "$KSU_DIR/kernel/Kconfig" 2>/dev/null || true
 grep -E 'CONFIG_KSU=|CONFIG_KSU_SUSFS=|CONFIG_KSU_KPROBE_HOOKS=' kernel/configs/oplus6895.config || true
