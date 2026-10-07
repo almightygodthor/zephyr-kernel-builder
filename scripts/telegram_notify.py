@@ -44,6 +44,11 @@ def main() -> int:
     actions_url = f"https://github.com/{owner_repo}/actions/runs/{run_id}"
     root = os.environ.get("ROOT_IMPL", "ksu-next")
     root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
+    root_releases = {
+        "ksu-next": "https://github.com/KernelSU-Next/KernelSU-Next/releases",
+        "kernel-su": "https://github.com/tiann/KernelSU/releases",
+        "sukisu-ultra": "https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases",
+    }.get(root)
     susfs = os.environ.get("SUSFS_ENABLED", "false").lower() == "true"
     susfs_label = "SUSFS" if susfs else "No SUSFS"
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
@@ -77,7 +82,8 @@ def main() -> int:
             keyboard.append([{"text": "⬇️ Download Kernel ZIP", "url": download_url}])
         if release_url:
             keyboard.append([{"text": "📦 GitHub Release ↗", "url": release_url}])
-        keyboard.append([{"text": "🌱 KernelSU ↗", "url": "https://github.com/tiann/KernelSU/releases"}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
+        if root_releases:
+            keyboard.append([{"text": f"🌱 {root_label} ↗", "url": root_releases}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
     elif state == "started":
         # The Telegram worker already owns the single live build card.
         # Avoid creating a second BUILD STARTED message from the Actions workflow.
