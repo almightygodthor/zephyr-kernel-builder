@@ -43,7 +43,7 @@ def main() -> int:
     owner_repo = os.environ.get("GITHUB_REPOSITORY", "almightygodthor/zephyr-kernel-builder")
     actions_url = f"https://github.com/{owner_repo}/actions/runs/{run_id}"
     root = os.environ.get("ROOT_IMPL", "ksu-next")
-    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
     susfs = os.environ.get("SUSFS_ENABLED", "false").lower() == "true"
     susfs_label = "SUSFS" if susfs else "No SUSFS"
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
