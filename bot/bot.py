@@ -518,7 +518,7 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
     filled = min(blocks, max(0, int(round(pct / 100 * blocks))))
     bar = "█" * filled + "░" * (blocks - filled)
     spin = SPINNER[frame % len(SPINNER)]
-    root_label = "KSU-Next" if root == "ksu-next" else "No Root"
+    root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
     susfs_label = "SUSFS" if susfs else "No SUSFS"
 
     return (
@@ -840,7 +840,7 @@ def handle_callback(query):
                 (
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
-                    f"🌱 {'KSU-Next' if root == 'ksu-next' else 'No Root'} · "
+                    f"🌱 {{"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")} · "
                     f"ඞ {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
                     f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
