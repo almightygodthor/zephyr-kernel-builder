@@ -88,9 +88,14 @@ if [ "$SUSFS_ENABLED" = "true" ]; then
     echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y"
   } >> "$CONFIG_FRAGMENT"
 else
-  echo "==> Installing KernelSU-Next"
-  bash KernelSU-Next/kernel/setup.sh dev-susfs
-  printf '\n# KernelSU-Next\nCONFIG_KSU=y\n' >> kernel/configs/oplus6895.config
+  echo "==> Installing root implementation"
+  if [ "$ROOT_IMPL" = "ksu-next" ]; then
+    bash "$KSU_DIR/kernel/setup.sh" dev-susfs
+    printf "\n# KernelSU-Next\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+  else
+    bash "$KSU_DIR/kernel/setup.sh" "$KSU_REF"
+    printf "\n# KernelSU\nCONFIG_KSU=y\n" >> kernel/configs/oplus6895.config
+  fi
 fi
 
 echo "==> Verifying integration"
