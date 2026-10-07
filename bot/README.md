@@ -37,7 +37,6 @@ GitHub's scheduler starts it again automatically. The scheduled workflow runs fr
 
 1. Send `/kernel` in the build group.
 2. Choose **KernelSU-Next**, **KernelSU**, or **No Root**.
-3. If using KernelSU-Next, choose **Enable SUSFS** or **Disable SUSFS**.
 4. Confirm **START BUILD**.
 5. The bot dispatches `.github/workflows/build.yml`.
 6. The existing build workflow sends start/completion/failure notifications and publishes the release.
