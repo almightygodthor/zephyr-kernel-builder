@@ -412,10 +412,10 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
     susfs_label = "SUSFS" if susfs else "No SUSFS"
 
     return (
-        f"<b>⚡ ZEPHYR · BUILDING {spin}</b>\n\n"
+        f"<b>⚡ KERNEL · BUILDING {spin}</b>\n\n"
         "📱 GT Neo 3 · zephyr\n"
         "🧩 Linux 5.10 · MT6895\n"
-        f"🌱 {root_label} · ඞ {susfs_label} · 📦 AK3\n\n"
+        f"🌱 {root_label} · ඞ {susfs_label}\n"\n        "📦 <b>AnyKernel3</b>\n\n"
         f"{spin} <b>{esc(stage)}</b>\n"
         f"<code>[{bar}] {pct}%</code>\n"
         f"⏱ {elapsed_text(run)} · 🆔 #{esc(run.get('run_number', '?'))}"
