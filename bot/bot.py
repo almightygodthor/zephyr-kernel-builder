@@ -25,7 +25,6 @@ WORKER_SECONDS = 60 * 60
 POLL_TIMEOUT = 2
 MONITOR_INTERVAL = 0.5
 GH_PROGRESS_INTERVAL = 1
-PENDING_CONFIGS = {}
 TRACKED_RUNS = {}
 STOP_REQUESTED = False
 LAST_BOT_MESSAGES = {}
@@ -289,36 +288,24 @@ def root_keyboard():
     return [
         [{"text": "🌱 KernelSU-Next", "callback_data": "root:ksu-next"}],
         [{"text": "🛡️ KernelSU", "callback_data": "root:kernel-su"}],
-        [{"text": "🧬 SukiSU-Ultra", "callback_data": "root:sukisu-ultra"}],
         [{"text": "⚪ No Root", "callback_data": "root:none"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
 
 
-def susfs_keyboard(root):
+def confirm_keyboard(root):
     return [
-        [{"text": "ඞ Enable SUSFS", "callback_data": f"susfs:{root}:on"}],
-        [{"text": "⚪ Disable SUSFS", "callback_data": f"susfs:{root}:off"}],
-        [{"text": "◀️ Back", "callback_data": "build"}],
-    ]
-
-
-def confirm_keyboard(root, susfs):
-    state = "on" if susfs else "off"
-    return [
-        [{"text": "🚀 START BUILD", "callback_data": f"confirm:{root}:{state}"}],
+        [{"text": "🚀 START BUILD", "callback_data": f"confirm:{root}"}],
         [{"text": "✏️ Change", "callback_data": "build"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
 
 
-def build_text(root, susfs):
-    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
-    susfs_label = "Enabled" if susfs else "Disabled"
+def build_text(root):
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
         f"🌱 Root · <code>{root_label}</code>\n"
-        f"ඞ SUSFS · <code>{susfs_label}</code>\n"
         "📦 AnyKernel3 · <code>Enabled</code>\n\n"
         "Ready to build?"
     )
@@ -341,18 +328,12 @@ def get_run(run_id):
 
 
 def run_config(run):
-    """Recover root/SUSFS from the workflow run name after a worker restart."""
     name = str(run.get("name", "")).lower()
     if "· kernel-su ·" in name:
-        root = "kernel-su"
-    elif "· sukisu-ultra ·" in name:
-        root = "sukisu-ultra"
-    elif "· ksu-next ·" in name:
-        root = "ksu-next"
-    else:
-        root = "none"
-    susfs = "· susfs true ·" in name
-    return root, susfs
+        return "kernel-su"
+    if "· ksu-next ·" in name:
+        return "ksu-next"
+    return "none"
 
 
 def refresh_tracked_screen(chat_id, item, text, keyboard):
@@ -402,13 +383,11 @@ def dispatch_release(run_id, run_number):
     )
 
 
-def dispatch_build(root, susfs):
+def dispatch_build(root):
     active = active_run()
     if active:
         return None, active
 
-    # Stop Bot intentionally disables the kernel workflow. Re-enable it
-    # automatically whenever a build is started from Telegram.
     gh(
         "PUT",
         f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(BUILD_WORKFLOW, safe='')}/enable",
@@ -421,7 +400,6 @@ def dispatch_build(root, susfs):
             "ref": BRANCH,
             "inputs": {
                 "root": root,
-                "susfs": "true" if susfs else "false",
                 "build_ak3": "true",
             },
             "return_run_details": True,
@@ -505,7 +483,7 @@ def job_progress(run):
         "Sync Android kernel build manifest": "Syncing kernel source",
         "Inspect source tree": "Inspecting source",
         "Prepare Image.gz-only build config": "Configuring kernel",
-        "Integrate KernelSU-Next and SUSFS": "Integrating KSU / SUSFS",
+        "Integrate KernelSU / KernelSU-Next": "Integrating KernelSU",
         "Build Image.gz": "Compiling Image.gz",
         "Verify Image.gz": "Verifying Image.gz",
         "Package AnyKernel3": "Packaging AnyKernel3",
@@ -525,7 +503,7 @@ def elapsed_text(run):
     return f"{seconds // 3600:02d}:{(seconds % 3600) // 60:02d}:{seconds % 60:02d}"
 
 
-def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None):
+def progress_message(run, root, frame, cached_stage=None, cached_pct=None):
     if cached_stage is not None and cached_pct is not None:
         stage, pct = cached_stage, cached_pct
     else:
@@ -539,14 +517,13 @@ def progress_message(run, root, susfs, frame, cached_stage=None, cached_pct=None
     filled = min(blocks, max(0, int(round(pct / 100 * blocks))))
     bar = "█" * filled + "░" * (blocks - filled)
     spin = SPINNER[frame % len(SPINNER)]
-    root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
-    susfs_label = "SUSFS" if susfs else "No SUSFS"
+    root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
 
     return (
         f"<b>⚡ KERNEL · BUILDING {spin}</b>\n\n"
         "📱 GT Neo 3 · zephyr\n"
         "🧩 Linux 5.10 · MT6895\n"
-        f"🌱 {root_label} · ඞ {susfs_label}\n"
+        f"🌱 {root_label}\n"
         "📦 <b>AnyKernel3</b>\n\n"
         f"{spin} <b>{esc(stage)}</b>\n"
         f"<code>[{bar}] {pct}%</code>\n"
@@ -579,12 +556,11 @@ def progress_keyboard(run):
     return rows
 
 
-def track_build(chat_id, message_id, run, root, susfs):
+def track_build(chat_id, message_id, run, root):
     TRACKED_RUNS[chat_id] = {
         "run_id": run["id"],
         "message_id": message_id,
         "root": root,
-        "susfs": susfs,
         "frame": 0,
         "last_update": 0,
         "last_gh_update": 0,
@@ -613,7 +589,6 @@ def monitor_builds():
                 text = progress_message(
                     run,
                     item["root"],
-                    item["susfs"],
                     item["frame"],
                     item.get("stage", "Starting runner…"),
                     item.get("pct", 0),
@@ -675,7 +650,7 @@ def handle_message(message):
                 print(f"tracked run lookup failed: {exc}", file=sys.stderr)
 
         if run and run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
-            text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+            text = progress_message(run, tracked["root"], tracked["frame"])
             tracked["frame"] += 1
             refresh_tracked_screen(chat_id, tracked, text, progress_keyboard(run))
             tracked["last_text"] = text
@@ -683,11 +658,11 @@ def handle_message(message):
             run = active_run()
             target_id = tracked["message_id"] if tracked else LAST_BOT_MESSAGES.get(chat_id)
             if run:
-                root, susfs = run_config(run)
+                root = run_config(run)
                 if target_id:
-                    text = progress_message(run, root, susfs, 0)
+                    text = progress_message(run, root, 0)
                     if tracked:
-                        tracked["root"], tracked["susfs"] = root, susfs
+                        tracked["root"] = root
                         refresh_tracked_screen(chat_id, tracked, text, progress_keyboard(run))
                         target_id = tracked["message_id"]
                     else:
@@ -696,14 +671,14 @@ def handle_message(message):
                         except APIError:
                             msg = send_fresh(chat_id, text, progress_keyboard(run))
                             target_id = msg["message_id"]
-                    track_build(chat_id, target_id, run, root, susfs)
+                    track_build(chat_id, target_id, run, root)
                 else:
                     msg = send_fresh(
                         chat_id,
-                        progress_message(run, root, susfs, 0),
+                        progress_message(run, root, 0),
                         progress_keyboard(run),
                     )
-                    track_build(chat_id, msg["message_id"], run, root, susfs)
+                    track_build(chat_id, msg["message_id"], run, root)
             else:
                 refresh_screen(
                     chat_id,
@@ -730,18 +705,10 @@ def handle_callback(query):
         if not is_owner(user_id):
             answer_callback(query_id, "Only the bot owner can stop Zephyr.", True)
             return
-        edit_message(
-            chat_id,
-            message_id,
-            stop_confirmation_text(),
-            stop_confirmation_keyboard(),
-        )
+        edit_message(chat_id, message_id, stop_confirmation_text(), stop_confirmation_keyboard())
         return
 
     if data == "stopback":
-        if not is_owner(user_id):
-            answer_callback(query_id, "Only the bot owner can use this control.", True)
-            return
         edit_message(chat_id, message_id, menu_text(), menu_keyboard(user_id))
         return
 
@@ -749,118 +716,50 @@ def handle_callback(query):
         if not is_owner(user_id):
             answer_callback(query_id, "Only the bot owner can stop Zephyr.", True)
             return
-
+        result = shutdown_zephyr()
         edit_message(
             chat_id,
             message_id,
-            "<b>⏳ STOPPING ZEPHYR…</b>\n\n"
-            "Disabling workflows and cancelling active runs…",
+            "<b>⛔ ZEPHYR BOT STOPPED</b>\n\n"
+            "🛑 Kernel builds · <b>OFF</b>\n"
+            "🛑 Telegram worker · <b>OFF</b>\n"
+            f"🧹 Active builds cancelled · <b>{result['build_cancelled']}</b>\n"
+            f"🧹 Other workers cancelled · <b>{result['bot_cancelled']}</b>\n\n"
+            "GitHub Release remains available.\n\n"
+            "To start again, re-enable and manually run the Telegram Bot workflow in GitHub Actions.",
+            [],
         )
-        result = shutdown_zephyr()
-        if result["disable_errors"]:
-            details = "\n".join(f"• {esc(item)}" for item in result["disable_errors"])
-            edit_message(
-                chat_id,
-                message_id,
-                "⚠️ <b>ZEPHYR STOP PARTIALLY FAILED</b>\n\n"
-                f"Disabled: {', '.join(result['disabled']) or 'none'}\n"
-                f"Cancelled builds: {result['build_cancelled']}\n"
-                f"Cancelled workers: {result['bot_cancelled']}\n\n"
-                f"<code>{details}</code>",
-                [],
-            )
-        else:
-            edit_message(
-                chat_id,
-                message_id,
-                "<b>⛔ ZEPHYR BOT STOPPED</b>\n\n"
-                "🛑 Kernel builds · <b>OFF</b>\n"
-                "🛑 Telegram worker · <b>OFF</b>\n"
-                f"🧹 Active builds cancelled · <b>{result['build_cancelled']}</b>\n"
-                f"🧹 Other workers cancelled · <b>{result['bot_cancelled']}</b>\n\n"
-                "GitHub Release remains available.\n\n"
-                "To start again, re-enable and manually run the Telegram Bot workflow in GitHub Actions.",
-                [],
-            )
         return
 
     try:
         if data == "build":
-            edit_message(
-                chat_id, message_id,
-                "<b>🌱 SELECT ROOT</b>\n\nChoose the root implementation:",
-                root_keyboard(),
-            )
+            edit_message(chat_id, message_id, "<b>🌱 SELECT ROOT</b>\n\nChoose the root implementation:", root_keyboard())
             return
 
         if data == "root:ksu-next":
-            edit_message(
-                chat_id, message_id,
-                "<b>ඞ SELECT SUSFS</b>\n\nKernelSU-Next selected.",
-                susfs_keyboard("ksu-next"),
-            )
+            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nKernelSU-Next selected.", confirm_keyboard("ksu-next"))
             return
 
         if data == "root:kernel-su":
-            edit_message(
-                chat_id, message_id,
-                "<b>ඞ SELECT SUSFS</b>\n\nKernelSU selected.",
-                susfs_keyboard("kernel-su"),
-            )
-            return
-
-        if data == "root:sukisu-ultra":
-            edit_message(
-                chat_id, message_id,
-                "<b>ඞ SELECT SUSFS</b>\n\nSukiSU-Ultra selected.",
-                susfs_keyboard("sukisu-ultra"),
-            )
+            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nKernelSU selected.", confirm_keyboard("kernel-su"))
             return
 
         if data == "root:none":
-            edit_message(
-                chat_id, message_id,
-                build_text("none", False),
-                confirm_keyboard("none", False),
-            )
-            return
-
-        if data.startswith("susfs:"):
-            _, root, state = data.split(":", 2)
-            if root not in {"ksu-next", "kernel-su", "sukisu-ultra"} or state not in {"on", "off"}:
-                raise APIError("invalid SUSFS selection")
-            susfs = state == "on"
-            PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
-            edit_message(chat_id, message_id, build_text(root, susfs), confirm_keyboard(root, susfs))
+            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nNo root selected.", confirm_keyboard("none"))
             return
 
         if data.startswith("confirm:"):
-            _, root, state = data.split(":", 2)
-            if root not in {"ksu-next", "kernel-su", "sukisu-ultra", "none"} or state not in {"on", "off"}:
+            _, root = data.split(":", 1)
+            if root not in {"ksu-next", "kernel-su", "none"}:
                 raise APIError("invalid build selection")
 
-            pending = PENDING_CONFIGS.pop(chat_id, None)
-            if pending:
-                root = pending["root"]
-                susfs = pending["susfs"]
-            else:
-                susfs = state == "on"
-
-            run, existing = dispatch_build(root, susfs)
+            run, existing = dispatch_build(root)
             if existing:
-                edit_message(
-                    chat_id, message_id,
-                    f"⚠️ <b>Build already running</b> · #{esc(existing.get('run_number', '?'))}",
-                    status_keyboard(existing),
-                )
+                edit_message(chat_id, message_id, f"⚠️ <b>Build already running</b> · #{esc(existing.get('run_number', '?'))}", status_keyboard(existing))
                 return
 
             if not run:
-                edit_message(
-                    chat_id, message_id,
-                    "⚠️ <b>Build dispatched</b>\nGitHub has not created the run yet.",
-                    menu_keyboard(user_id),
-                )
+                edit_message(chat_id, message_id, "⚠️ <b>Build dispatched</b>\nGitHub has not created the run yet.", menu_keyboard(user_id))
                 return
 
             root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
@@ -873,13 +772,13 @@ def handle_callback(query):
                 (
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
-f"🌱 {root_label} · "
-                    f"ඞ {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
+                    "🧩 Linux 5.10 · MT6895\n"
+                    f"🌱 {root_label} · 📦 AK3\n"
                     f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
                 rows,
             )
-            track_build(chat_id, message_id, run, root, susfs)
+            track_build(chat_id, message_id, run, root)
             return
 
         if data == "status":
@@ -892,27 +791,23 @@ f"🌱 {root_label} · "
                     print(f"tracked refresh lookup failed: {exc}", file=sys.stderr)
 
             if run and run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
-                text = progress_message(run, tracked["root"], tracked["susfs"], tracked["frame"])
+                text = progress_message(run, tracked["root"], tracked["frame"])
                 tracked["frame"] += 1
                 edit_message(chat_id, tracked["message_id"], text, progress_keyboard(run))
                 tracked["last_text"] = text
             else:
                 run = active_run()
                 if run:
-                    root, susfs = run_config(run)
-                    text = progress_message(run, root, susfs, 0)
+                    root = run_config(run)
+                    text = progress_message(run, root, 0)
                     try:
                         edit_message(chat_id, message_id, text, progress_keyboard(run))
                     except APIError:
                         msg = send_fresh(chat_id, text, progress_keyboard(run))
                         message_id = msg["message_id"]
-                    track_build(chat_id, message_id, run, root, susfs)
+                    track_build(chat_id, message_id, run, root)
                 else:
-                    edit_message(
-                        chat_id, message_id,
-                        "🟢 <b>No build is currently running.</b>",
-                        menu_keyboard(user_id),
-                    )
+                    edit_message(chat_id, message_id, "🟢 <b>No build is currently running.</b>", menu_keyboard(user_id))
             return
 
         if data.startswith("publish:"):
