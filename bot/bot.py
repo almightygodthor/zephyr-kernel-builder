@@ -288,6 +288,7 @@ def root_keyboard():
     return [
         [{"text": "🌱 KernelSU-Next", "callback_data": "root:ksu-next"}],
         [{"text": "🛡️ KernelSU", "callback_data": "root:kernel-su"}],
+        [{"text": "🧬 SukiSU-Ultra", "callback_data": "root:sukisu-ultra"}],
         [{"text": "⚪ No Root", "callback_data": "root:none"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
@@ -302,7 +303,7 @@ def confirm_keyboard(root):
 
 
 def build_text(root):
-    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
         f"🌱 Root · <code>{root_label}</code>\n"
@@ -331,6 +332,8 @@ def run_config(run):
     name = str(run.get("name", "")).lower()
     if "· kernel-su ·" in name:
         return "kernel-su"
+    if "· sukisu-ultra ·" in name:
+        return "sukisu-ultra"
     if "· ksu-next ·" in name:
         return "ksu-next"
     return "none"
@@ -744,13 +747,17 @@ def handle_callback(query):
             edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nKernelSU selected.", confirm_keyboard("kernel-su"))
             return
 
+        if data == "root:sukisu-ultra":
+            edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nSukiSU-Ultra selected.\n\nSUSFS is not integrated.", confirm_keyboard("sukisu-ultra"))
+            return
+
         if data == "root:none":
             edit_message(chat_id, message_id, "<b>⚡ BUILD CONFIG</b>\n\nNo root selected.", confirm_keyboard("none"))
             return
 
         if data.startswith("confirm:"):
             _, root = data.split(":", 1)
-            if root not in {"ksu-next", "kernel-su", "none"}:
+            if root not in {"ksu-next", "kernel-su", "sukisu-ultra", "none"}:
                 raise APIError("invalid build selection")
 
             run, existing = dispatch_build(root)
