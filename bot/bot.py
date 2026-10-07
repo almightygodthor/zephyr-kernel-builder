@@ -831,6 +831,7 @@ def handle_callback(query):
                 )
                 return
 
+            root_label = {"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
             rows = [[{"text": "🔄 Live Progress", "callback_data": "status"}]]
             if run.get("html_url"):
                 rows.append([{"text": "🔗 GitHub Actions ↗", "url": run["html_url"]}])
@@ -840,7 +841,7 @@ def handle_callback(query):
                 (
                     "<b>🚀 ZEPHYR · BUILD QUEUED</b>\n\n"
                     "📱 GT Neo 3 · zephyr\n"
-                    f"🌱 {{"ksu-next": "KSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")} · "
+f"🌱 {root_label} · "
                     f"ඞ {'SUSFS' if susfs else 'No SUSFS'} · 📦 AK3\n"
                     f"🆔 Run <code>#{esc(run.get('run_number', '?'))}</code>"
                 ),
