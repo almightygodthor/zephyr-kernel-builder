@@ -230,14 +230,25 @@ def shutdown_zephyr():
     results = {"disabled": [], "disable_errors": [], "build_cancelled": 0, "bot_cancelled": 0}
 
     # Disable first so scheduled/queued dispatches cannot create a new run
-    # while we clean up currently active runs.
+    # while we clean up currently active runs. GitHub returns 403 when asking
+    # to disable a workflow that is already disabled, so check its state first.
     for workflow_id, label in ((BUILD_WORKFLOW, "kernel build"), (BOT_WORKFLOW, "Telegram bot")):
         try:
-            gh(
-                "PUT",
-                f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(workflow_id, safe='')}/disable",
+            workflow = gh(
+                "GET",
+                f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(workflow_id, safe='')}",
             )
-            results["disabled"].append(label)
+            state = workflow.get("state")
+            if state == "active":
+                gh(
+                    "PUT",
+                    f"/repos/{REPO}/actions/workflows/{urllib.parse.quote(workflow_id, safe='')}/disable",
+                )
+                results["disabled"].append(label)
+            elif state == "disabled_manually":
+                print(f"{label} workflow is already disabled.", flush=True)
+            else:
+                print(f"{label} workflow state is {state!r}; leaving unchanged.", flush=True)
         except Exception as exc:
             results["disable_errors"].append(f"{label}: {exc}")
 
