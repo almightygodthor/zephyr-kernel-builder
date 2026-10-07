@@ -38,7 +38,7 @@ Build flow:
 ```
 🔨 Build Kernel
     ↓
-🌱 Select Root (KernelSU-Next / KernelSU / No Root)
+🌱 Select Root (KernelSU-Next / KernelSU / SukiSU-Ultra / No Root)
     ↓
 🚀 Start Build
     ↓
