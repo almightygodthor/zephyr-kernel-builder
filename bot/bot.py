@@ -289,6 +289,7 @@ def root_keyboard():
     return [
         [{"text": "🌱 KernelSU-Next", "callback_data": "root:ksu-next"}],
         [{"text": "🛡️ KernelSU", "callback_data": "root:kernel-su"}],
+        [{"text": "🧬 SukiSU-Ultra", "callback_data": "root:sukisu-ultra"}],
         [{"text": "⚪ No Root", "callback_data": "root:none"}],
         [{"text": "❌ Cancel", "callback_data": "cancel"}],
     ]
@@ -312,7 +313,7 @@ def confirm_keyboard(root, susfs):
 
 
 def build_text(root, susfs):
-    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU"}.get(root, "No Root")
+    root_label = {"ksu-next": "KernelSU-Next", "kernel-su": "KernelSU", "sukisu-ultra": "SukiSU-Ultra"}.get(root, "No Root")
     susfs_label = "Enabled" if susfs else "Disabled"
     return (
         "<b>⚡ BUILD CONFIG</b>\n\n"
@@ -344,6 +345,8 @@ def run_config(run):
     name = str(run.get("name", "")).lower()
     if "· kernel-su ·" in name:
         root = "kernel-su"
+    elif "· sukisu-ultra ·" in name:
+        root = "sukisu-ultra"
     elif "· ksu-next ·" in name:
         root = "ksu-next"
     else:
@@ -816,7 +819,7 @@ def handle_callback(query):
 
         if data.startswith("susfs:"):
             _, root, state = data.split(":", 2)
-            if root not in {"ksu-next", "kernel-su"} or state not in {"on", "off"}:
+            if root not in {"ksu-next", "kernel-su", "sukisu-ultra"} or state not in {"on", "off"}:
                 raise APIError("invalid SUSFS selection")
             susfs = state == "on"
             PENDING_CONFIGS[chat_id] = {"root": root, "susfs": susfs}
@@ -825,7 +828,7 @@ def handle_callback(query):
 
         if data.startswith("confirm:"):
             _, root, state = data.split(":", 2)
-            if root not in {"ksu-next", "kernel-su", "none"} or state not in {"on", "off"}:
+            if root not in {"ksu-next", "kernel-su", "sukisu-ultra", "none"} or state not in {"on", "off"}:
                 raise APIError("invalid build selection")
 
             pending = PENDING_CONFIGS.pop(chat_id, None)
@@ -833,7 +836,7 @@ def handle_callback(query):
                 root = pending["root"]
                 susfs = pending["susfs"]
             else:
-                susfs = root == "ksu-next" and state == "on"
+                susfs = state == "on"
 
             run, existing = dispatch_build(root, susfs)
             if existing:
