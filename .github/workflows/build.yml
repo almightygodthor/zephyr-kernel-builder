@@ -168,6 +168,9 @@ jobs:
           elif [ "$ROOT_IMPL" = "ksu-next" ]; then
             KSU_COMMIT="$(git -C kernel-5.10/KernelSU-Next rev-parse HEAD 2>/dev/null || echo none)"
             KSU_REF="$(git -C kernel-5.10/KernelSU-Next describe --tags --always 2>/dev/null || echo unknown)"
+          elif [ "$ROOT_IMPL" = "sukisu-ultra" ]; then
+            KSU_COMMIT="$(git -C kernel-5.10/SukiSU-Ultra rev-parse HEAD 2>/dev/null || echo none)"
+            KSU_REF="$(git -C kernel-5.10/SukiSU-Ultra describe --tags --always 2>/dev/null || echo main)"
           else
             KSU_COMMIT="none"
             KSU_REF="none"
