@@ -16,6 +16,7 @@ mkdir -p artifacts
 TS="$(date -u +%Y%m%d-%H%M)"
 ROOT_LABEL="NoRoot"
 [ "$ROOT_IMPL" = "ksu-next" ] && ROOT_LABEL="KSU-Next"
+[ "$ROOT_IMPL" = "kernel-su" ] && ROOT_LABEL="KernelSU"
 SUSFS_LABEL="NoSUSFS"
 [ "$SUSFS_ENABLED" = "true" ] && SUSFS_LABEL="SUSFS"
 NAME="Zephyr-${ROOT_LABEL}-${SUSFS_LABEL}-${TS}"
