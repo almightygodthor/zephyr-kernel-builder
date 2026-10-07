@@ -20,8 +20,8 @@ fi
 # KernelSU-Next + SUSFS integration for the MT6895 5.10 AOSP-style tree.
 # The manager fork is the known SUSFS-compatible dev-susfs tree. SUSFS itself
 # comes from the upstream GitLab project and its Android 12 / 5.10 branch.
-KSU_REPO="https://github.com/pershoot/KernelSU-Next.git"
-KSU_REF="dev-susfs"
+
+
 SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"
 SUSFS_REF="gki-android12-5.10"
 
@@ -35,7 +35,7 @@ if [ "$ROOT_IMPL" = "ksu-next" ]; then
   git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" "$KSU_DIR"
 else
   KSU_REPO="https://github.com/tiann/KernelSU.git"
-  KSU_REF="$(git ls-remote --tags --refs "$KSU_REPO" 'v*' | tail -n1 | sed 's#.*refs/tags/##')"
+  KSU_REF="$(git ls-remote --tags --refs "$KSU_REPO" 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -n1)"
   [ -n "$KSU_REF" ] || { echo "Could not determine latest KernelSU tag"; exit 1; }
   KSU_DIR="KernelSU"
   echo "==> Cloning KernelSU"
@@ -77,11 +77,13 @@ if [ "$SUSFS_ENABLED" = "true" ]; then
   CONFIG_FRAGMENT="kernel/configs/oplus6895.config"
   {
     echo
-    echo "# KernelSU-Next + SUSFS"
+    echo "# Root + SUSFS"
     echo "CONFIG_KSU=y"
     echo "CONFIG_KPROBES=y"
     echo "CONFIG_KPROBE_EVENTS=y"
-    echo "CONFIG_KSU_KPROBE_HOOKS=y"
+    if [ "$ROOT_IMPL" = "ksu-next" ]; then
+      echo "CONFIG_KSU_KPROBE_HOOKS=y"
+    fi
     echo "CONFIG_KSU_SUSFS=y"
     echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y"
   } >> "$CONFIG_FRAGMENT"
