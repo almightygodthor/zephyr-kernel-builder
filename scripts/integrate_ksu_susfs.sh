@@ -32,14 +32,14 @@ if [ "$ROOT_IMPL" = "ksu-next" ]; then
   KSU_REF="dev-susfs"
   KSU_DIR="KernelSU-Next"
   echo "==> Cloning KernelSU-Next"
-  git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
+  git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" "$KSU_DIR"
 else
   KSU_REPO="https://github.com/tiann/KernelSU.git"
   KSU_REF="$(git ls-remote --tags --refs "$KSU_REPO" 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -n1)"
   [ -n "$KSU_REF" ] || { echo "Could not determine latest KernelSU tag"; exit 1; }
   KSU_DIR="KernelSU"
   echo "==> Cloning KernelSU"
-  git clone --depth=1 --branch "$KSU_REF" "$KSU_REPO" "$KSU_DIR"
+  git clone --depth=1 "$KSU_REPO" "$KSU_DIR"
 fi
 
 if [ ! -f "$KSU_DIR/kernel/setup.sh" ]; then
