@@ -191,13 +191,13 @@ def stop_confirmation_keyboard():
 
 def stop_confirmation_text():
     return (
-        "<b>⚠️ STOP ZEPHYR BOT?</b>\\n\\n"
-        "This will:\\n"
-        "• Disable new kernel builds\\n"
-        "• Disable the Telegram bot worker\\n"
-        "• Cancel active kernel builds\\n"
-        "• Cancel other active Telegram workers\\n\\n"
-        "The GitHub Release workflow will remain available.\\n\\n"
+        "<b>⚠️ STOP ZEPHYR BOT?</b>\n\n"
+        "This will:\n"
+        "• Disable new kernel builds\n"
+        "• Disable the Telegram bot worker\n"
+        "• Cancel active kernel builds\n"
+        "• Cancel other active Telegram workers\n\n"
+        "The GitHub Release workflow will remain available.\n\n"
         "Are you sure?"
     )
 
