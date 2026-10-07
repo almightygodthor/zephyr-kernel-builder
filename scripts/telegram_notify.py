@@ -49,8 +49,6 @@ def main() -> int:
         "kernel-su": "https://github.com/tiann/KernelSU/releases",
         "sukisu-ultra": "https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases",
     }.get(root)
-    susfs = os.environ.get("SUSFS_ENABLED", "false").lower() == "true"
-    susfs_label = "SUSFS" if susfs else "No SUSFS"
     icon = {"started": "🚀", "success": "✅", "failure": "❌", "cancelled": "🛑"}.get(state, "ℹ️")
 
     if state == "success":
@@ -58,7 +56,7 @@ def main() -> int:
             "<b>⚡ ZEPHYR · BUILD COMPLETE</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
             "🧩 Linux 5.10 · MT6895\n"
-            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n\n"
+            f"🌱 {html.escape(root_label)} · 📦 AK3\n\n"
             "🧪 <b>Actions artifact is ready for testing.</b>\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
@@ -74,7 +72,7 @@ def main() -> int:
             "<b>🚀 ZEPHYR · RELEASE PUBLISHED</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
             "🧩 Linux 5.10 · MT6895\n"
-            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
+            f"🌱 {html.escape(root_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
         keyboard = []
@@ -83,7 +81,7 @@ def main() -> int:
         if release_url:
             keyboard.append([{"text": "📦 GitHub Release ↗", "url": release_url}])
         if root_releases:
-            keyboard.append([{"text": f"🌱 {root_label} ↗", "url": root_releases}, {"text": "ඞ SUSFS ↗", "url": "https://github.com/sidex15/susfs4ksu-module/releases"}])
+            keyboard.append([{"text": f"🌱 {root_label} ↗", "url": root_releases}])
     elif state == "started":
         # The Telegram worker already owns the single live build card.
         # Avoid creating a second BUILD STARTED message from the Actions workflow.
@@ -92,7 +90,7 @@ def main() -> int:
         body = (
             f"<b>{icon} ZEPHYR · BUILD {html.escape(state.upper())}</b>\n\n"
             "📱 GT Neo 3 · zephyr\n"
-            f"🌱 {html.escape(root_label)} · ඞ {html.escape(susfs_label)} · 📦 AK3\n"
+            f"🌱 {html.escape(root_label)} · 📦 AK3\n"
             f"🆔 Run <code>#{html.escape(run_number)}</code>"
         )
         keyboard = [
